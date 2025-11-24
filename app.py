@@ -6,39 +6,32 @@ import pdfplumber
 # --- CONFIGURATION ---
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
-# --- BACKEND: SMART PDF PARSER ---
+# --- BACKEND: PRECISION PDF PARSER ---
 def parse_pdf_match(file):
-    """
-    Extracts the match result specifically from the 'RESULTATS' table 
-    using the Set Duration (e.g. 26') as an anchor.
-    """
     text = ""
     with pdfplumber.open(file) as pdf:
         for page in pdf.pages:
             text += page.extract_text() + "\n"
 
-    # 1. Extract Team Names (Look for the top header)
-    # Heuristic: Find lines with "Senior" or "Masculin" and grab nearby capitalized text
+    # 1. Extract Team Names
     lines = text.split('\n')
     team_a = "Home Team"
     team_b = "Away Team"
     
-    # Try to find specific FFvolley headers
     for i, line in enumerate(lines[:30]):
         if "Equipe A" in line or "Team A" in line:
-            # Usually the team name is on the next line or same line
-            team_a = line.replace("Equipe A", "").replace(":", "").strip()
-            if not team_a and i+1 < len(lines): team_a = lines[i+1].strip()
+            clean_line = line.replace("Equipe A", "").replace(":", "").strip()
+            if len(clean_line) > 3: team_a = clean_line
+            elif i+1 < len(lines): team_a = lines[i+1].strip()
         if "Equipe B" in line or "Team B" in line:
-            team_b = line.replace("Equipe B", "").replace(":", "").strip()
-            if not team_b and i+1 < len(lines): team_b = lines[i+1].strip()
+            clean_line = line.replace("Equipe B", "").replace(":", "").strip()
+            if len(clean_line) > 3: team_b = clean_line
+            elif i+1 < len(lines): team_b = lines[i+1].strip()
 
-    # 2. Extract Sets from the RESULTATS table
-    # We look for lines containing a duration pattern like "26'" or "1h57"
+    # 2. Extract Sets using "Duration Anchor" Logic
     valid_sets = []
     
-    # Regex to find the 'Duration' column (e.g., "26'", "31'", "110'")
-    # The structure is: [Stats A] [Score A] [Duration] [Score B] [Stats B]
+    # Regex to find duration (e.g., 26', 31')
     duration_pattern = re.compile(r"\s+(\d{1,3})['’]\s+")
     
     found_results_table = False
@@ -46,47 +39,49 @@ def parse_pdf_match(file):
     for line in lines:
         if "RESULTATS" in line:
             found_results_table = True
-            continue
+        
+        # Stop processing if we hit the footer
+        if "Vainqueur" in line or "SIGNATURES" in line:
+            found_results_table = False
             
         if found_results_table:
-            # Stop if we hit the footer signatures
-            if "Vainqueur" in line or "SIGNATURES" in line:
-                break
-                
-            # Search for the duration anchor (e.g., 26')
             match = duration_pattern.search(line)
             if match:
-                # Split the line into Left (Team A) and Right (Team B) using the duration
+                # Split line by the duration anchor
                 anchor_span = match.span()
                 left_part = line[:anchor_span[0]].strip()
                 right_part = line[anchor_span[1]:].strip()
+                duration_val = int(match.group(1))
+
+                # Filter out the "Total" row (usually > 60 mins)
+                if duration_val > 60:
+                    continue
                 
-                # Logic: The SCORE is the LAST number on the Left and FIRST number on the Right
-                # Filter out non-digit characters to be safe
+                # Get all numbers
                 left_nums = re.findall(r'\d+', left_part)
                 right_nums = re.findall(r'\d+', right_part)
                 
-                if left_nums and right_nums:
+                # LOGIC: 
+                # Left side ends with: [Score] [SetNum] -> so we need second to last
+                # Right side starts with: [Score]
+                if len(left_nums) >= 2 and len(right_nums) >= 1:
                     try:
-                        score_a = int(left_nums[-1]) # Last number on left
-                        score_b = int(right_nums[0]) # First number on right
+                        score_a = int(left_nums[-2]) # Second to last (20)
+                        set_num = int(left_nums[-1]) # Last (1)
+                        score_b = int(right_nums[0]) # First (25)
                         
-                        # Sanity Check: A set must have ~15-30 points
-                        if score_a > 5 and score_b > 5: 
-                            valid_sets.append({"Home": score_a, "Away": score_b})
+                        # Verification: Set Num must be 1-5, Scores > 0
+                        if 1 <= set_num <= 5 and score_a > 0 and score_b > 0:
+                            valid_sets.append({
+                                "Set": set_num,
+                                "Home": score_a,
+                                "Away": score_b
+                            })
                     except:
                         continue
 
-    # 3. Fallback: If 'RESULTATS' table parsing failed, try strict regex
-    if not valid_sets:
-        # Strict pattern: Look for "25-22" or "25:22" explicitly
-        # Ignore anything with "15:" (likely substitutions)
-        raw_scores = re.findall(r'(?<!\d)(1[0-9]|2[0-9]|3[0-5])\s*[:\-]\s*(1[0-9]|2[0-9]|3[0-5])(?!\d)', text)
-        for s1, s2 in raw_scores:
-            if abs(int(s1) - int(s2)) >= 2: # Must be 2 point diff
-                valid_sets.append({"Home": int(s1), "Away": int(s2)})
-        # Remove duplicates preserving order
-        valid_sets = [dict(t) for t in {tuple(d.items()) for d in valid_sets}]
+    # 3. Sort by Set Number
+    valid_sets.sort(key=lambda x: x['Set'])
 
     return {
         "teams": {"Home": team_a, "Away": team_b},
@@ -119,7 +114,6 @@ def main():
         else:
             # Visualization
             sets_df = pd.DataFrame(data['sets'])
-            sets_df['Set'] = range(1, len(sets_df) + 1)
             sets_df['Diff'] = sets_df['Home'] - sets_df['Away']
             
             # 1. Score Table
