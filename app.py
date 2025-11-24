@@ -28,35 +28,81 @@ def generate_mock_player_stats(roster):
     return pd.DataFrame(data)
 
 # --- BACKEND: PDF PARSER ---
+# --- BACKEND: ROBUST PDF PARSER ---
 def parse_pdf_match(file):
     """
-    Extracts Scores and Teams from the PDF.
+    Extracts Scores with strict volleyball logic to avoid confusing
+    times (20:30) with scores (25-20).
     """
     text = ""
     with pdfplumber.open(file) as pdf:
         for page in pdf.pages:
             text += page.extract_text() + "\n"
             
-    # Regex to find scores (Example: "25:22" or "25-22")
-    # We allow specific volleyball score patterns
-    score_pattern = re.findall(r'(\d{2})[:\-](\d{2})', text)
+    # 1. Broad Regex to capture "Number-Separator-Number"
+    # Captures: 25-22, 25:22, 25/22, 25 22
+    potential_scores = re.findall(r'(?<!\d)(\d{2})\s*[:\-\s]\s*(\d{2})(?!\d)', text)
     
     valid_sets = []
-    for s1, s2 in score_pattern:
-        sc_home, sc_away = int(s1), int(s2)
-        # Filter logic: Sets usually end >15 pts (except tie break)
-        if (sc_home > 14 or sc_away > 14) and abs(sc_home - sc_away) >= 2:
-            valid_sets.append({"Home": sc_home, "Away": sc_away})
-            
-    # Mock Roster Extraction (since parsing names is hard without AI)
-    home_roster = ["#2 Beccaert", "#4 Renoux", "#5 Brun", "#9 Blanc", "#18 Mingoua", "#10 Houdayer"]
-    away_roster = ["#1 Fanfelle", "#5 Nabos", "#6 Layre", "#9 Auge T.", "#15 Magomayev", "#11 Castaings"]
     
+    for s1, s2 in potential_scores:
+        try:
+            sc_home, sc_away = int(s1), int(s2)
+            
+            # --- FILTER 1: The "Impossible Score" Check ---
+            # Volleyball sets rarely go above 35-40 points. 
+            # If we see "45" or "100", it's likely a Duration or Total Points.
+            if sc_home > 40 or sc_away > 40:
+                continue
+                
+            # --- FILTER 2: The "Minimum Points" Check ---
+            # A set must involve at least one team reaching 15 points.
+            # This filters out "0-0", "1-0", or times like "00:45".
+            if max(sc_home, sc_away) < 15:
+                continue
+
+            # --- FILTER 3: The "Winner" Check ---
+            # A valid set usually has a winner with 25 (or 15) points, 
+            # OR it is an overtime set (both > 24).
+            # Times like "20:30" fail this because neither is 25+ or in overtime.
+            is_regular_set = (sc_home == 25 or sc_away == 25)
+            is_tiebreak = (sc_home == 15 or sc_away == 15)
+            is_overtime = (sc_home > 24 and sc_away > 24)
+            
+            # Allow logic: One team hits 25/15 OR it's overtime
+            if is_regular_set or is_tiebreak or is_overtime:
+                
+                # Check for duplicates (Text extraction often repeats the same score)
+                # Only add if it's not the exact same score as the last one found
+                if not valid_sets or (valid_sets[-1]['Home'] != sc_home or valid_sets[-1]['Away'] != sc_away):
+                    valid_sets.append({"Home": sc_home, "Away": sc_away})
+                    
+        except ValueError:
+            continue
+            
+    # Fallback: If we extracted too many sets (duplicates), keep only first 5
+    if len(valid_sets) > 5:
+        valid_sets = valid_sets[:5]
+
+    # --- TEAM NAME EXTRACTION (Basic) ---
+    # Look for "Team A" and "Team B" headers often found in these files
+    # This is a heuristic; might need adjustment for specific file layouts
+    home_team = "HOME TEAM"
+    away_team = "AWAY TEAM"
+    
+    lines = text.split('\n')
+    for line in lines[:20]: # Check top header
+        if "Equipe A" in line or "Team A" in line:
+            home_team = line.replace("Equipe A", "").strip()
+        if "Equipe B" in line or "Team B" in line:
+            away_team = line.replace("Equipe B", "").strip()
+
     return {
-        "teams": {"Home": "MÉRIGNAC", "Away": "LESCAR"},
+        "teams": {"Home": home_team, "Away": away_team},
         "sets": valid_sets,
-        "roster_home": home_roster,
-        "roster_away": away_roster
+        # Mock rosters are kept for the visual demo
+        "roster_home": ["#1 Player", "#2 Libero", "#3 Setter"], 
+        "roster_away": ["#10 Captain", "#11 Hitter", "#12 Blocker"]
     }
 
 # --- FRONTEND: DASHBOARD ---
