@@ -10,7 +10,7 @@ class VolleySheetExtractor:
     def __init__(self, pdf_file):
         self.pdf = pdfplumber.open(pdf_file)
         self.page0 = self.pdf.pages[0]
-        self.img_scale = 200 # Higher res for better inspection
+        self.img_scale = 200 
         self.scale_factor = 72 / 200
 
     def get_page_image(self):
@@ -20,34 +20,25 @@ class VolleySheetExtractor:
         return val * self.scale_factor
 
     def get_cell_debug(self, base_x, base_y, w, h, offset_x, offset_y, target_set, target_team, target_pos_idx):
-        """Returns the cropped image and text for a SINGLE cell."""
-        
-        # Calculate Y for the Set
         set_y_px = base_y + ((target_set - 1) * offset_y)
-        
-        # Calculate X for the Team
         team_x_px = base_x if target_team == "Left" else base_x + offset_x
-        
-        # Calculate X for the Position (0-5)
         cell_x_px = team_x_px + (target_pos_idx * w)
         
-        # Scale to PDF Points
         pdf_x = self._scale_coords(cell_x_px)
         pdf_y = self._scale_coords(set_y_px)
         pdf_w = self._scale_coords(w)
         pdf_h = self._scale_coords(h)
         
-        # Crop Box
-        bbox = (pdf_x, pdf_y, pdf_x + pdf_w, pdf_y + pdf_h)
+        # Crop Box (Strict Top-Half Crop for Debug Text)
+        # We only look at the top 40% to avoid the "1 2 3 4" points grid
+        bbox_text = (pdf_x, pdf_y, pdf_x + pdf_w, pdf_y + (pdf_h * 0.4))
         
-        # 1. Get Image of crop
-        # We need to crop from the high-res image, so we convert bbox back to pixels roughly
+        # Image Crop (Show full box so user can see context)
         img_bbox = (cell_x_px, set_y_px, cell_x_px + w, set_y_px + h)
         cell_img = self.get_page_image().crop(img_bbox)
         
-        # 2. Get Text
         try:
-            crop = self.page0.crop(bbox)
+            crop = self.page0.crop(bbox_text)
             raw_text = crop.extract_text()
         except:
             raw_text = "Error"
@@ -76,13 +67,19 @@ class VolleySheetExtractor:
         pdf_y = self._scale_coords(start_y_px)
         pdf_h = self._scale_coords(h_px)
         
+        # Safety Check
         if pdf_y + pdf_h > self.page0.height: return ["?"] * 6
 
         for i in range(6):
             x_px = start_x_px + (i * w_px)
             pdf_x = self._scale_coords(x_px)
             pdf_w = self._scale_coords(w_px)
-            bbox = (pdf_x + 2, pdf_y + 2, pdf_x + pdf_w - 2, pdf_y + pdf_h - 2)
+            
+            # --- THE FIX: TOP-CROP LOGIC ---
+            # Instead of looking at the full height (pdf_h), we only look at 
+            # the top 40% (pdf_h * 0.4). This physically excludes the 
+            # points grid (11 12 13...) below the starter number.
+            bbox = (pdf_x + 2, pdf_y + 2, pdf_x + pdf_w - 2, pdf_y + (pdf_h * 0.4))
             
             try:
                 text = self.page0.crop(bbox).extract_text()
@@ -90,7 +87,9 @@ class VolleySheetExtractor:
                 if text:
                     tokens = text.split()
                     for token in tokens:
+                        # Extract digits only
                         clean = re.sub(r'[^0-9]', '', token)
+                        # Valid volleyball jersey numbers are 1-99
                         if clean.isdigit() and len(clean) <= 2:
                             val = clean
                             break
@@ -112,7 +111,7 @@ class VolleySheetExtractor:
         return img
 
 def main():
-    st.title("🏐 VolleyStats: X-Ray Calibrator")
+    st.title("🏐 VolleyStats: Auto-Extractor")
     
     with st.sidebar:
         uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
@@ -125,7 +124,6 @@ def main():
 
     tab1, tab2, tab3 = st.tabs(["📐 Align Grid", "🔍 X-Ray Inspector", "📥 Extract Data"])
 
-    # SHARED SLIDERS
     with tab1:
         st.write("### 1. Global Calibration")
         c1, c2 = st.columns(2)
@@ -142,13 +140,12 @@ def main():
         debug_img = extractor.draw_full_grid(img, base_x, base_y, w, h, offset_x, offset_y)
         st.image(debug_img, use_container_width=True)
 
-    # NEW INSPECTOR TAB
     with tab2:
         st.write("### 2. Check Specific Cells")
-        st.info("Use this to see why Set 2 or 3 is failing. Adjust 'Down Offset' in Tab 1 based on what you see here.")
+        st.info("The Inspector now only reads the **Top 40%** of the box to avoid reading the points grid.")
         
         c_set, c_team, c_pos = st.columns(3)
-        inspect_set = c_set.number_input("Inspect Set #", 1, 5, 2)
+        inspect_set = c_set.number_input("Inspect Set #", 1, 5, 1)
         inspect_team = c_team.selectbox("Inspect Team", ["Left", "Right"])
         inspect_pos = c_pos.selectbox("Inspect Position", ["I", "II", "III", "IV", "V", "VI"])
         
@@ -161,13 +158,13 @@ def main():
         
         c_img, c_txt = st.columns(2)
         with c_img:
-            st.image(cell_img, width=150, caption=f"What computer sees (Set {inspect_set})")
+            st.image(cell_img, width=150, caption=f"Visual Context")
         with c_txt:
-            st.metric("Raw Text Found", f"'{raw_txt}'")
-            if not raw_txt or raw_txt.strip() == "":
-                st.error("⚠️ Empty! The box is drifting into white space.")
+            st.metric("Cleaned Text (Top 40%)", f"'{raw_txt}'")
+            if raw_txt.strip().isdigit():
+                st.success("✅ Valid Player Number Found!")
             else:
-                st.success("Text detected.")
+                st.warning("⚠️ Reading Garbage")
 
     with tab3:
         if st.button("🚀 Extract All"):
