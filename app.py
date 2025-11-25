@@ -64,7 +64,8 @@ class VolleySheetExtractor:
     def __init__(self, pdf_file):
         self.pdf_file = pdf_file
 
-    def extract_lineups(self, base_x, base_y, w, h, offset_x, offset_y, p_height):
+    # --- FIXED NAME HERE ---
+    def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y, p_height):
         match_data = []
         with pdfplumber.open(self.pdf_file) as pdf:
             page = pdf.pages[0]
@@ -185,6 +186,7 @@ def calculate_player_stats(df, scores):
             "Win %": round(win_pct, 1)
         })
         
+    if not stats_list: return pd.DataFrame()
     return pd.DataFrame(stats_list).sort_values(by=['Team', 'Win %'], ascending=False)
 
 # ==========================================
@@ -196,6 +198,7 @@ def main():
 
     with st.sidebar:
         uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
+        # Pre-loaded Golden Coordinates
         with st.expander("⚙️ Calibration"):
             base_x = st.number_input("Start X", value=123)
             base_y = st.number_input("Start Y", value=88)
@@ -209,7 +212,7 @@ def main():
     extractor = VolleySheetExtractor(uploaded_file)
     
     with st.spinner("Analyzing Match..."):
-        # A. Get Lineups
+        # A. Get Lineups (Use fixed dimensions W=23, H=20, OffY=151, PageH=842)
         lineups_data = extractor.extract_full_match(base_x, base_y, 23, 20, offset_x, 151, 842)
         df_lineups = pd.DataFrame(lineups_data)
         
@@ -217,7 +220,7 @@ def main():
         scores_data = extract_scores_text(uploaded_file)
 
     if df_lineups.empty:
-        st.error("No lineup data found.")
+        st.error("No lineup data found. Please check the file.")
         return
 
     # --- DASHBOARD ---
@@ -225,7 +228,10 @@ def main():
     # Top Metric: Final Score
     home_sets = sum(1 for s in scores_data if s['Home'] > s['Away'])
     away_sets = sum(1 for s in scores_data if s['Away'] > s['Home'])
-    st.markdown(f"<h1 style='text-align: center;'>Home {home_sets} - {away_sets} Away</h1>", unsafe_allow_html=True)
+    
+    # Only show score if we found data
+    if scores_data:
+        st.markdown(f"<h1 style='text-align: center;'>Home {home_sets} - {away_sets} Away</h1>", unsafe_allow_html=True)
 
     tab1, tab2, tab3 = st.tabs(["📊 Player Stats", "🏟️ Rotation Map", "📥 Raw Data"])
 
@@ -234,15 +240,18 @@ def main():
         if scores_data:
             stats_df = calculate_player_stats(df_lineups, scores_data)
             
-            c1, c2 = st.columns(2)
-            with c1:
-                st.subheader("Home Team Impact")
-                home_stats = stats_df[stats_df['Team'] == 'Home']
-                st.dataframe(home_stats[['Player', 'Sets Played', 'Win %']], use_container_width=True)
-            with c2:
-                st.subheader("Away Team Impact")
-                away_stats = stats_df[stats_df['Team'] == 'Away']
-                st.dataframe(away_stats[['Player', 'Sets Played', 'Win %']], use_container_width=True)
+            if not stats_df.empty:
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.subheader("Home Team Impact")
+                    home_stats = stats_df[stats_df['Team'] == 'Home']
+                    st.dataframe(home_stats[['Player', 'Sets Played', 'Win %']], use_container_width=True)
+                with c2:
+                    st.subheader("Away Team Impact")
+                    away_stats = stats_df[stats_df['Team'] == 'Away']
+                    st.dataframe(away_stats[['Player', 'Sets Played', 'Win %']], use_container_width=True)
+            else:
+                st.warning("No player stats calculated (check if extracted numbers are valid).")
         else:
             st.warning("Could not read set scores from text. Win % unavailable.")
 
@@ -268,6 +277,7 @@ def main():
     with tab3:
         # Format for Excel
         export_df = df_lineups.copy()
+        # Split starters into columns
         cols = pd.DataFrame(export_df['Starters'].tolist(), columns=[f'Zone {i+1}' for i in range(6)])
         export_df = pd.concat([export_df[['Set', 'Team']], cols], axis=1)
         
