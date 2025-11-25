@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
 # ==========================================
-# 1. CORE ENGINES (IMAGE & TEXT)
+# 1. CORE ENGINES
 # ==========================================
 
 @st.cache_data(show_spinner=False)
@@ -40,23 +40,33 @@ def extract_match_info(file):
     potential_names = []
     for line in lines:
         if "Début:" in line:
-            segment = line.split("Début:")[0]
-            if "Fin:" in segment:
-                segment = segment.split("Fin:")[-1]
-                segment = re.sub(r'\d{2}:\d{2}\s*R?', '', segment)
-            
-            clean_name = re.sub(r'\b(SA|SB|S|R)\b', '', segment)
-            clean_name = re.sub(r'^[^A-Z]+|[^A-Z]+$', '', clean_name).strip()
-            
-            if len(clean_name) > 3:
-                potential_names.append(clean_name)
+            # Find all occurrences of "Début:" in the line
+            parts = line.split("Début:")
+            # The text BEFORE each "Début:" is a team name candidate
+            for part in parts[:-1]:
+                # Cleanup: Remove "Fin:" timestamps if they exist
+                if "Fin:" in part:
+                    part = part.split("Fin:")[-1]
+                
+                # Cleanup: Remove time patterns (e.g. 14:24 R)
+                part = re.sub(r'\d{2}:\d{2}\s*R?', '', part)
+                
+                # Cleanup: Remove S, SA, SB markers
+                clean_name = re.sub(r'\b(SA|SB|S|R)\b', '', part)
+                clean_name = re.sub(r'^[^A-Z]+|[^A-Z]+$', '', clean_name).strip()
+                
+                if len(clean_name) > 3:
+                    potential_names.append(clean_name)
 
     unique_names = list(dict.fromkeys(potential_names))
+    
+    # Default assignment
     team_home = unique_names[1] if len(unique_names) > 1 else "Home Team"
     team_away = unique_names[0] if len(unique_names) > 0 else "Away Team"
     
     # --- 2. SCORES ---
     scores = []
+    # Regex for duration: 26', 26 ’, etc.
     duration_pattern = re.compile(r"(\d{1,3})\s*['’′`]")
     found_table = False
     
@@ -68,19 +78,24 @@ def extract_match_info(file):
             match = duration_pattern.search(line)
             if match:
                 duration_val = int(match.group(1))
-                # Only look at lines that are actual sets (duration < 60 mins)
-                # This prevents reading the "Total Match Time" line as a score
+                
+                # Only look at lines that look like sets (duration < 60 mins)
                 if duration_val < 60:
-                    parts = line.split(match.group(0))
+                    parts = line.split(match.group(0)) # Split by "26'"
                     if len(parts) >= 2:
+                        # Left side: [... Score, SetNum]
                         left = re.findall(r'\d+', parts[0])
+                        # Right side: [Score, ...]
                         right = re.findall(r'\d+', parts[1])
-                        if left and right:
+                        
+                        if len(left) >= 2 and len(right) >= 1:
                             try:
-                                s_home = int(left[-1])
+                                # FIX: Home score is 2nd to last (left[-2]), Set Num is last (left[-1])
+                                s_home = int(left[-2])
                                 s_away = int(right[0])
-                                # Sanity check: A set score must be reasonable (e.g. > 5)
-                                if s_home > 5 and s_away > 5:
+                                
+                                # Sanity check
+                                if s_home > 0 and s_away > 0:
                                     scores.append({"Home": s_home, "Away": s_away})
                             except: pass
                             
@@ -113,6 +128,8 @@ class VolleySheetExtractor:
             drift = i * 0.3
             px_x = start_x + (i * w) + drift
             px_y = top_y
+            
+            # Box: Expanded 3px width, 80% height
             bbox = (px_x - 3, px_y, px_x + w + 3, px_y + (h * 0.8))
             try:
                 text = page.crop(bbox).extract_text()
@@ -130,11 +147,10 @@ class VolleySheetExtractor:
         return row_data
 
 # ==========================================
-# 2. VISUALIZATION HELPERS
+# 3. VISUALIZATION HELPERS
 # ==========================================
 
 def draw_court_view(starters):
-    # Handle short lists
     safe_starters = [s if s != "?" else "-" for s in starters]
     while len(safe_starters) < 6: safe_starters.append("-")
 
@@ -156,7 +172,6 @@ def draw_court_view(starters):
 def calculate_player_stats(df, scores):
     player_stats = {}
     
-    # Map Set Number to Winner
     set_winners = {}
     for i, s in enumerate(scores):
         set_num = i + 1
@@ -195,7 +210,6 @@ def calculate_player_stats(df, scores):
 def draw_grid(base_img, bx, by, w, h, off_x, off_y):
     img = base_img.copy()
     draw = ImageDraw.Draw(img)
-    
     for s in range(4): 
         cur_y = by + (s * off_y)
         # Left (Red)
@@ -212,7 +226,7 @@ def draw_grid(base_img, bx, by, w, h, off_x, off_y):
     return img
 
 # ==========================================
-# 3. MAIN APP UI
+# 4. MAIN APP
 # ==========================================
 
 def main():
@@ -245,40 +259,38 @@ def main():
 
     # --- DASHBOARD ---
     
-    # Calculate Match Winner based on Sets Won
+    # Calculate Match Winner
     home_wins = sum(1 for s in scores_data if s['Home'] > s['Away'])
     away_wins = sum(1 for s in scores_data if s['Away'] > s['Home'])
     
-    c_head1, c_head2, c_head3 = st.columns([1, 2, 1])
-    c_head1.metric("Home", t_home)
-    c_head3.metric("Away", t_away)
-    c_head2.markdown(f"<h1 style='text-align: center; color: #FF4B4B;'>{home_wins} - {away_wins}</h1>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([2, 1, 2])
+    c1.metric("HOME", t_home)
+    c3.metric("AWAY", t_away)
+    c2.markdown(f"<h1 style='text-align: center; color: #FF4B4B;'>{home_wins} - {away_wins}</h1>", unsafe_allow_html=True)
+
+    # Warning if scores missing
+    if not scores_data:
+        st.warning("⚠️ Could not auto-read set scores. Win % stats will be empty.")
 
     st.divider()
 
     tab1, tab2, tab3 = st.tabs(["📊 Player Stats", "🏟️ Rotation Map", "📥 Raw Data"])
 
-    # TAB 1: PLAYER WIN %
     with tab1:
         if scores_data:
             stats_df = calculate_player_stats(df_lineups, scores_data)
             
             if not stats_df.empty:
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.subheader(f"{t_home} Stats")
-                    home_stats = stats_df[stats_df['Team'] == 'Home']
-                    st.dataframe(home_stats[['Player', 'Sets Played', 'Win %']], use_container_width=True)
-                with c2:
-                    st.subheader(f"{t_away} Stats")
-                    away_stats = stats_df[stats_df['Team'] == 'Away']
-                    st.dataframe(away_stats[['Player', 'Sets Played', 'Win %']], use_container_width=True)
+                c_a, c_b = st.columns(2)
+                with c_a:
+                    st.subheader(f"{t_home} Impact")
+                    st.dataframe(stats_df[stats_df['Team'] == 'Home'][['Player', 'Sets Played', 'Win %']], use_container_width=True)
+                with c_b:
+                    st.subheader(f"{t_away} Impact")
+                    st.dataframe(stats_df[stats_df['Team'] == 'Away'][['Player', 'Sets Played', 'Win %']], use_container_width=True)
             else:
-                st.warning("No player stats calculated.")
-        else:
-            st.warning("Could not read set scores from text.")
+                st.info("Player data found, but could not match with scores.")
 
-    # TAB 2: VISUAL ROTATIONS
     with tab2:
         c_sel1, c_sel2 = st.columns(2)
         selected_set = c_sel1.selectbox("Select Set", df_lineups['Set'].unique())
@@ -293,17 +305,17 @@ def main():
         else:
             st.info("No data for this selection.")
 
-    # TAB 3: EXPORT
     with tab3:
-        # Draw Debug Grid to verify alignment if needed
+        # Calibration View
         try:
             file_bytes = uploaded_file.getvalue()
             base_img, _ = get_page_image(file_bytes)
             debug_img = draw_grid(base_img, base_x, base_y, 23, 20, offset_x, 151)
-            with st.expander("View Alignment Grid"):
+            with st.expander("🔍 Check Grid Alignment"):
                 st.image(debug_img)
         except: pass
 
+        # Export
         export_df = df_lineups.copy()
         cols = pd.DataFrame(export_df['Starters'].tolist(), columns=[f'Zone {i+1}' for i in range(6)])
         export_df = pd.concat([export_df[['Set', 'Team']], cols], axis=1)
