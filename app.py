@@ -1,328 +1,100 @@
 import streamlit as st
-import pdfplumber
 import pandas as pd
-import pypdfium2 as pdfium
-import re
-import gc
-import plotly.express as px
-import plotly.graph_objects as go
-from PIL import Image, ImageDraw
+from src.reader import render_page_to_image
+from src.processor import extract_match_info, VolleySheetExtractor, calculate_stats
+from src.visualizer import draw_calibration_grid, draw_court_view
 
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
-# ==========================================
-# 1. CORE ENGINES
-# ==========================================
-
+# Wrapper Cache pour le Reader
 @st.cache_data(show_spinner=False)
-def get_page_image(file_bytes):
-    pdf = pdfium.PdfDocument(file_bytes)
-    page = pdf[0]
-    scale = 1.0 
-    bitmap = page.render(scale=scale)
-    pil_image = bitmap.to_pil()
-    page.close()
-    pdf.close()
-    gc.collect()
-    return pil_image, scale
-
-def extract_match_info(file):
-    """
-    Extracts Team Names and Set Scores using text analysis.
-    """
-    text = ""
-    with pdfplumber.open(file) as pdf:
-        text = pdf.pages[0].extract_text()
-    
-    lines = text.split('\n')
-    
-    # --- 1. TEAM NAMES (Robust 'Début' Logic) ---
-    potential_names = []
-    for line in lines:
-        if "Début:" in line:
-            # Find all occurrences of "Début:" in the line
-            parts = line.split("Début:")
-            # The text BEFORE each "Début:" is a team name candidate
-            for part in parts[:-1]:
-                # Cleanup: Remove "Fin:" timestamps if they exist
-                if "Fin:" in part:
-                    part = part.split("Fin:")[-1]
-                
-                # Cleanup: Remove time patterns (e.g. 14:24 R)
-                part = re.sub(r'\d{2}:\d{2}\s*R?', '', part)
-                
-                # Cleanup: Remove S, SA, SB markers
-                clean_name = re.sub(r'\b(SA|SB|S|R)\b', '', part)
-                clean_name = re.sub(r'^[^A-Z]+|[^A-Z]+$', '', clean_name).strip()
-                
-                if len(clean_name) > 3:
-                    potential_names.append(clean_name)
-
-    unique_names = list(dict.fromkeys(potential_names))
-    
-    # Default assignment
-    team_home = unique_names[1] if len(unique_names) > 1 else "Home Team"
-    team_away = unique_names[0] if len(unique_names) > 0 else "Away Team"
-    
-    # --- 2. SCORES ---
-    scores = []
-    # Regex for duration: 26', 26 ’, etc.
-    duration_pattern = re.compile(r"(\d{1,3})\s*['’′`]")
-    found_table = False
-    
-    for line in lines:
-        if "RESULTATS" in line: found_table = True
-        if "Vainqueur" in line: found_table = False
-        
-        if found_table:
-            match = duration_pattern.search(line)
-            if match:
-                duration_val = int(match.group(1))
-                
-                # Only look at lines that look like sets (duration < 60 mins)
-                if duration_val < 60:
-                    parts = line.split(match.group(0)) # Split by "26'"
-                    if len(parts) >= 2:
-                        # Left side: [... Score, SetNum]
-                        left = re.findall(r'\d+', parts[0])
-                        # Right side: [Score, ...]
-                        right = re.findall(r'\d+', parts[1])
-                        
-                        if len(left) >= 2 and len(right) >= 1:
-                            try:
-                                # FIX: Home score is 2nd to last (left[-2]), Set Num is last (left[-1])
-                                s_home = int(left[-2])
-                                s_away = int(right[0])
-                                
-                                # Sanity check
-                                if s_home > 0 and s_away > 0:
-                                    scores.append({"Home": s_home, "Away": s_away})
-                            except: pass
-                            
-    return team_home, team_away, scores
-
-class VolleySheetExtractor:
-    def __init__(self, pdf_file):
-        self.pdf_file = pdf_file
-
-    def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y, p_height):
-        match_data = []
-        with pdfplumber.open(self.pdf_file) as pdf:
-            page = pdf.pages[0]
-            for set_num in range(1, 6): 
-                current_y = base_y + ((set_num - 1) * offset_y)
-                
-                if current_y + h < p_height:
-                    # Left
-                    row_l = self._extract_row(page, current_y, base_x, w, h)
-                    if row_l: match_data.append({"Set": set_num, "Team": "Home", "Starters": row_l})
-                    # Right
-                    row_r = self._extract_row(page, current_y, base_x + offset_x, w, h)
-                    if row_r: match_data.append({"Set": set_num, "Team": "Away", "Starters": row_r})
-        gc.collect()
-        return match_data
-
-    def _extract_row(self, page, top_y, start_x, w, h):
-        row_data = []
-        for i in range(6):
-            drift = i * 0.3
-            px_x = start_x + (i * w) + drift
-            px_y = top_y
-            
-            # Box: Expanded 3px width, 80% height
-            bbox = (px_x - 3, px_y, px_x + w + 3, px_y + (h * 0.8))
-            try:
-                text = page.crop(bbox).extract_text()
-                val = "?"
-                if text:
-                    for token in text.split():
-                        clean = re.sub(r'[^0-9]', '', token)
-                        if clean.isdigit() and len(clean) <= 2:
-                            val = clean
-                            break
-                row_data.append(val)
-            except:
-                row_data.append("?")
-        if all(x == "?" for x in row_data): return None
-        return row_data
-
-# ==========================================
-# 3. VISUALIZATION HELPERS
-# ==========================================
-
-def draw_court_view(starters):
-    safe_starters = [s if s != "?" else "-" for s in starters]
-    while len(safe_starters) < 6: safe_starters.append("-")
-
-    court_data = [
-        [safe_starters[3], safe_starters[2], safe_starters[1]], 
-        [safe_starters[4], safe_starters[5], safe_starters[0]]
-    ]
-    
-    fig = px.imshow(court_data, 
-                    text_auto=True, 
-                    color_continuous_scale='Blues',
-                    labels=dict(x="Zone", y="Row", color="Val"),
-                    x=['Left (4/5)', 'Center (3/6)', 'Right (2/1)'],
-                    y=['Front Row', 'Back Row'])
-    fig.update_traces(textfont_size=24)
-    fig.update_layout(coloraxis_showscale=False, width=400, height=300, margin=dict(l=20, r=20, t=20, b=20))
-    return fig
-
-def calculate_player_stats(df, scores):
-    player_stats = {}
-    
-    set_winners = {}
-    for i, s in enumerate(scores):
-        set_num = i + 1
-        winner = "Home" if s['Home'] > s['Away'] else "Away"
-        set_winners[set_num] = winner
-
-    for index, row in df.iterrows():
-        team = row['Team'] 
-        set_n = row['Set']
-        
-        if set_n in set_winners:
-            did_win = (team == set_winners[set_n])
-            
-            for player in row['Starters']:
-                if player != "?" and player.isdigit():
-                    if player not in player_stats:
-                        player_stats[player] = {'played': 0, 'won': 0, 'team': team}
-                    
-                    player_stats[player]['played'] += 1
-                    if did_win:
-                        player_stats[player]['won'] += 1
-    
-    stats_list = []
-    for p, data in player_stats.items():
-        win_pct = (data['won'] / data['played']) * 100 if data['played'] > 0 else 0
-        stats_list.append({
-            "Player": f"#{p}",
-            "Team": data['team'],
-            "Sets Played": data['played'],
-            "Win %": round(win_pct, 1)
-        })
-        
-    if not stats_list: return pd.DataFrame()
-    return pd.DataFrame(stats_list).sort_values(by=['Team', 'Win %'], ascending=False)
-
-def draw_grid(base_img, bx, by, w, h, off_x, off_y):
-    img = base_img.copy()
-    draw = ImageDraw.Draw(img)
-    for s in range(4): 
-        cur_y = by + (s * off_y)
-        # Left (Red)
-        for i in range(6):
-            drift = i * 0.3
-            x = bx + (i * w) + drift
-            draw.rectangle([x, cur_y, x + w, cur_y + h], outline="red", width=2)
-        # Right (Blue)
-        cur_x = bx + off_x
-        for i in range(6):
-            drift = i * 0.3
-            x = cur_x + (i * w) + drift
-            draw.rectangle([x, cur_y, x + w, cur_y + h], outline="blue", width=2)
-    return img
-
-# ==========================================
-# 4. MAIN APP
-# ==========================================
+def get_cached_image(file_bytes):
+    return render_page_to_image(file_bytes, dpi=72)
 
 def main():
     st.title("🏐 VolleyStats Pro")
 
     with st.sidebar:
-        uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
-        with st.expander("⚙️ Calibration"):
+        uploaded_file = st.file_uploader("Importer la Feuille de Match (PDF)", type="pdf")
+        with st.expander("⚙️ Calibration Avancée"):
             base_x = st.number_input("Start X", value=123)
             base_y = st.number_input("Start Y", value=88)
             offset_x = st.number_input("Right Offset", value=492) 
             
     if not uploaded_file:
-        st.info("Upload PDF to begin.")
+        st.info("Veuillez importer un fichier PDF pour commencer.")
         return
 
+    # 1. Affichage & Calibration
+    try:
+        file_bytes = uploaded_file.getvalue()
+        base_img, _ = get_cached_image(file_bytes)
+    except Exception as e:
+        st.error("Erreur de lecture du PDF.")
+        return
+
+    # 2. Extraction des Données
     extractor = VolleySheetExtractor(uploaded_file)
+    t_home, t_away, scores = extract_match_info(uploaded_file)
     
-    # 1. Extract Info (Scores & Names)
-    t_home, t_away, scores_data = extract_match_info(uploaded_file)
-    
-    # 2. Extract Lineups
-    with st.spinner("Analyzing Match..."):
-        lineups_data = extractor.extract_full_match(base_x, base_y, 23, 20, offset_x, 151, 842)
-        df_lineups = pd.DataFrame(lineups_data)
+    with st.spinner("Analyse du match en cours..."):
+        # Extraction Lineups (W=23, H=20, OffY=151 sont les constantes magiques)
+        raw_data = extractor.extract_full_match(base_x, base_y, 23, 20, offset_x, 151, 842)
+        df = pd.DataFrame(raw_data)
 
-    if df_lineups.empty:
-        st.error("No lineup data found.")
+    if df.empty:
+        st.error("Impossible de lire les lineups. Vérifiez la calibration.")
         return
 
-    # --- DASHBOARD ---
-    
-    # Calculate Match Winner
-    home_wins = sum(1 for s in scores_data if s['Home'] > s['Away'])
-    away_wins = sum(1 for s in scores_data if s['Away'] > s['Home'])
+    # 3. Interface Dashboard
+    home_wins = sum(1 for s in scores if s['Home'] > s['Away'])
+    away_wins = sum(1 for s in scores if s['Away'] > s['Home'])
     
     c1, c2, c3 = st.columns([2, 1, 2])
-    c1.metric("HOME", t_home)
-    c3.metric("AWAY", t_away)
+    c1.metric("DOMICILE", t_home)
+    c3.metric("EXTÉRIEUR", t_away)
     c2.markdown(f"<h1 style='text-align: center; color: #FF4B4B;'>{home_wins} - {away_wins}</h1>", unsafe_allow_html=True)
-
-    # Warning if scores missing
-    if not scores_data:
-        st.warning("⚠️ Could not auto-read set scores. Win % stats will be empty.")
 
     st.divider()
 
-    tab1, tab2, tab3 = st.tabs(["📊 Player Stats", "🏟️ Rotation Map", "📥 Raw Data"])
+    tab1, tab2, tab3 = st.tabs(["📊 Statistiques Joueurs", "🏟️ Rotation Visuelle", "🔧 Calibration & Données"])
 
     with tab1:
-        if scores_data:
-            stats_df = calculate_player_stats(df_lineups, scores_data)
-            
+        if scores:
+            stats_df = calculate_stats(df, scores)
             if not stats_df.empty:
                 c_a, c_b = st.columns(2)
                 with c_a:
-                    st.subheader(f"{t_home} Impact")
-                    st.dataframe(stats_df[stats_df['Team'] == 'Home'][['Player', 'Sets Played', 'Win %']], use_container_width=True)
+                    st.subheader(f"Impact {t_home}")
+                    st.dataframe(stats_df[stats_df['Team'] == 'Home'][['Player', 'Sets', 'Win %']], use_container_width=True)
                 with c_b:
-                    st.subheader(f"{t_away} Impact")
-                    st.dataframe(stats_df[stats_df['Team'] == 'Away'][['Player', 'Sets Played', 'Win %']], use_container_width=True)
-            else:
-                st.info("Player data found, but could not match with scores.")
+                    st.subheader(f"Impact {t_away}")
+                    st.dataframe(stats_df[stats_df['Team'] == 'Away'][['Player', 'Sets', 'Win %']], use_container_width=True)
+        else:
+            st.warning("Scores des sets non détectés. Statistiques indisponibles.")
 
     with tab2:
         c_sel1, c_sel2 = st.columns(2)
-        selected_set = c_sel1.selectbox("Select Set", df_lineups['Set'].unique())
-        selected_team = c_sel2.selectbox("Select Team", ["Home", "Away"])
+        sel_set = c_sel1.selectbox("Choisir le Set", df['Set'].unique())
+        sel_team = c_sel2.selectbox("Choisir l'équipe", ["Home", "Away"])
         
-        subset = df_lineups[(df_lineups['Set'] == selected_set) & (df_lineups['Team'] == selected_team)]
-        
+        subset = df[(df['Set'] == sel_set) & (df['Team'] == sel_team)]
         if not subset.empty:
             starters = subset.iloc[0]['Starters']
             fig = draw_court_view(starters)
             st.plotly_chart(fig, use_container_width=False)
         else:
-            st.info("No data for this selection.")
+            st.info("Pas de données pour cette sélection.")
 
     with tab3:
-        # Calibration View
-        try:
-            file_bytes = uploaded_file.getvalue()
-            base_img, _ = get_page_image(file_bytes)
-            debug_img = draw_grid(base_img, base_x, base_y, 23, 20, offset_x, 151)
-            with st.expander("🔍 Check Grid Alignment"):
-                st.image(debug_img)
-        except: pass
-
-        # Export
-        export_df = df_lineups.copy()
+        debug_img = draw_calibration_grid(base_img, base_x, base_y, 23, 20, offset_x, 151)
+        st.image(debug_img, caption="Vérification visuelle des boîtes de capture", use_container_width=True)
+        
+        # Export CSV
+        export_df = df.copy()
         cols = pd.DataFrame(export_df['Starters'].tolist(), columns=[f'Zone {i+1}' for i in range(6)])
         export_df = pd.concat([export_df[['Set', 'Team']], cols], axis=1)
-        
         st.dataframe(export_df)
-        csv = export_df.to_csv(index=False).encode('utf-8')
-        st.download_button("Download CSV", csv, "match_stats.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
