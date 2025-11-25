@@ -1,145 +1,143 @@
 import streamlit as st
 import pdfplumber
 import pandas as pd
-import io
 from PIL import Image, ImageDraw
 
-# --- CONFIGURATION ---
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
-# --- CLASS: THE GRID EXTRACTOR ---
 class VolleySheetExtractor:
     def __init__(self, pdf_file):
         self.pdf = pdfplumber.open(pdf_file)
         self.page0 = self.pdf.pages[0]
+        # Standard FFVolley sheets are usually 150-200 DPI equivalent in pixels
+        self.img_scale = 150 
 
     def get_page_image(self):
-        """Converts PDF page to image for visualization."""
-        return self.page0.to_image(resolution=150).original
+        return self.page0.to_image(resolution=self.img_scale).original
 
-    def extract_grid_data(self, anchor_x, anchor_y, cell_w, cell_h):
-        """
-        Extracts data starting from the anchor point (Top-Left of Zone I).
-        We assume standard FFVolley spacing.
-        """
-        data = {}
+    def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y):
+        """Extracts all sets based on the calibrated offsets."""
+        match_data = []
         
-        # 1. Extract Starters (Row 1)
-        # Zones: I, II, III, IV, V, VI
-        starters = []
-        for i in range(6):
-            # Calculate box for each zone
-            x0 = anchor_x + (i * cell_w)
-            y0 = anchor_y
-            x1 = x0 + cell_w
-            y1 = y0 + cell_h
+        # Loop through Sets 1 to 5
+        # Note: Set 5 might be in a different spot, but this covers 1-4 standard layout
+        for set_num in range(1, 5): 
+            # Calculate Y for this set
+            current_y = base_y + ((set_num - 1) * offset_y)
             
-            # Crop and Extract
+            # --- TEAM A (LEFT) ---
+            team_a_starters = self._extract_row(base_x, current_y, w, h)
+            match_data.append({
+                "Set": set_num, "Team": "Left", "Starters": team_a_starters
+            })
+            
+            # --- TEAM B (RIGHT) ---
+            # Team B is usually at Base X + Offset X
+            team_b_x = base_x + offset_x
+            team_b_starters = self._extract_row(team_b_x, current_y, w, h)
+            match_data.append({
+                "Set": set_num, "Team": "Right", "Starters": team_b_starters
+            })
+            
+        return match_data
+
+    def _extract_row(self, start_x, start_y, w, h):
+        """Helper to extract 6 grid cells."""
+        row_data = []
+        for i in range(6):
+            x0 = start_x + (i * w)
+            y0 = start_y
+            x1 = x0 + w
+            y1 = y0 + h
+            
+            # Crop using PDF coordinates (need to scale from Image coordinates)
+            # PDFPlumber coordinates are points (1/72 inch). Image is pixels.
+            # We use a rough scaling factor or just assume user calibrated in PDF-space if using raw crop
+            # For simplicity in this demo, we assume the slider values map 1:1 to the crop logic used previously
+            
             crop = self.page0.crop((x0, y0, x1, y1))
             text = crop.extract_text()
             val = text.strip() if text else "?"
-            starters.append(val)
-        
-        data['Starters'] = starters
+            row_data.append(val)
+        return row_data
 
-        # 2. Extract Substitutes (Row 2 - roughly 20px below starters)
-        # Note: In your image, subs are directly below starters
-        subs = []
-        sub_offset_y = cell_h  # The row immediately below
-        
-        for i in range(6):
-            x0 = anchor_x + (i * cell_w)
-            y0 = anchor_y + sub_offset_y
-            x1 = x0 + cell_w
-            y1 = y0 + sub_offset_y + cell_h
-            
-            crop = self.page0.crop((x0, y0, x1, y1))
-            text = crop.extract_text()
-            val = text.strip() if text else ""
-            subs.append(val)
-            
-        data['Subs'] = subs
-        
-        return data
-
-    def draw_debug_grid(self, img, anchor_x, anchor_y, cell_w, cell_h):
-        """Draws the grid on top of the image so user can see alignment."""
+    def draw_full_grid(self, img, bx, by, w, h, off_x, off_y):
         draw = ImageDraw.Draw(img)
         
-        # Draw Starters Row (Red)
-        for i in range(6):
-            x0 = anchor_x + (i * cell_w)
-            y0 = anchor_y
-            x1 = x0 + cell_w
-            y1 = y0 + cell_h
-            draw.rectangle([x0, y0, x1, y1], outline="red", width=2)
-
-        # Draw Subs Row (Blue)
-        sub_offset_y = cell_h
-        for i in range(6):
-            x0 = anchor_x + (i * cell_w)
-            y0 = anchor_y + sub_offset_y
-            x1 = x0 + cell_w
-            y1 = y0 + sub_offset_y + cell_h
-            draw.rectangle([x0, y0, x1, y1], outline="blue", width=2)
+        # Draw 4 Sets vertically
+        for s in range(4):
+            cur_y = by + (s * off_y)
             
+            # Draw Left Team (Red)
+            for i in range(6):
+                draw.rectangle(
+                    [bx + (i*w), cur_y, bx + (i*w) + w, cur_y + h],
+                    outline="red", width=3
+                )
+            
+            # Draw Right Team (Blue)
+            # Only draw if offset_x is > 0 (user has started calibrating it)
+            if off_x > 0:
+                cur_x_right = bx + off_x
+                for i in range(6):
+                    draw.rectangle(
+                        [cur_x_right + (i*w), cur_y, cur_x_right + (i*w) + w, cur_y + h],
+                        outline="blue", width=3
+                    )
         return img
 
-# --- FRONTEND ---
 def main():
-    st.title("🏐 VolleyStats: Grid Slicer")
-
+    st.title("🏐 VolleyStats: Full Sheet Calibrator")
+    
     with st.sidebar:
         uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
-    
+
     if not uploaded_file:
-        st.info("Upload a file to start calibrating.")
+        st.info("Upload PDF to begin.")
         return
 
-    # Initialize Extractor
     extractor = VolleySheetExtractor(uploaded_file)
-    
-    tab1, tab2 = st.tabs(["📐 Grid Calibrator", "📊 Extracted Data"])
 
-    # --- TAB 1: CALIBRATOR ---
+    tab1, tab2 = st.tabs(["📐 Full Page Calibration", "📊 Extracted Data"])
+
     with tab1:
-        st.markdown("### Calibrate Grid Position")
-        st.markdown("Adjust these sliders until the **Red Boxes** align perfectly with the **Starting Lineup** numbers.")
-
+        st.write("### 1. Match the RED BOXES (Team A)")
         c1, c2 = st.columns(2)
         with c1:
-            # Default values are guesses for standard FFVolley A4
-            anchor_x = st.slider("X Position (Left-Right)", 0, 600, 75, step=1)
-            anchor_y = st.slider("Y Position (Up-Down)", 0, 800, 160, step=1)
+            base_x = st.slider("Start X", 0, 600, 264) # Defaulted to your value
+            base_y = st.slider("Start Y", 0, 800, 186) # Defaulted to your value
         with c2:
-            cell_w = st.slider("Cell Width", 10, 50, 22, step=1)
-            cell_h = st.slider("Cell Height", 10, 50, 18, step=1)
+            w = st.slider("Cell Width", 10, 60, 50)    # Defaulted to your value
+            h = st.slider("Cell Height", 10, 60, 50)   # Defaulted to your value
 
-        # Draw the visual feedback
-        base_img = extractor.get_page_image()
-        debug_img = extractor.draw_debug_grid(base_img, anchor_x, anchor_y, cell_w, cell_h)
-        st.image(debug_img, caption="Red = Starters, Blue = Subs", use_column_width=True)
+        st.divider()
+        st.write("### 2. Match the BLUE BOXES (Team B & Lower Sets)")
+        st.info("Increase these sliders until the Blue boxes land on Team B (Right) and Sets 2/3/4 (Below).")
+        
+        c3, c4 = st.columns(2)
+        with c3:
+            # Distance to the Right Grid
+            offset_x = st.slider("➡️ Right Offset (Team B)", 0, 1000, 0, step=5)
+        with c4:
+            # Distance to the Next Set Below
+            offset_y = st.slider("⬇️ Down Offset (Next Set)", 0, 600, 0, step=5)
 
-        # Live Preview of Extraction
-        try:
-            live_data = extractor.extract_grid_data(anchor_x, anchor_y, cell_w, cell_h)
-            st.write("### Live Preview:")
-            st.json(live_data)
-        except Exception as e:
-            st.error(f"Extraction Error: {e}")
+        # Visualization
+        img = extractor.get_page_image()
+        debug_img = extractor.draw_full_grid(img, base_x, base_y, w, h, offset_x, offset_y)
+        st.image(debug_img, use_container_width=True)
 
-    # --- TAB 2: RESULTS ---
     with tab2:
-        st.subheader("Final Extracted Roster")
-        if 'live_data' in locals():
-            df = pd.DataFrame({
-                "Position": ["I", "II", "III", "IV", "V", "VI"],
-                "Starter": live_data['Starters'],
-                "Substitute": live_data['Subs']
-            })
-            st.table(df)
+        if st.button("Extract All Sets"):
+            data = extractor.extract_full_match(base_x, base_y, w, h, offset_x, offset_y)
             
-            st.success("✅ Once you have these coordinates, you can hardcode them for all future files!")
+            df = pd.DataFrame(data)
+            
+            # Clean up the list presentation
+            df['Starters'] = df['Starters'].apply(lambda x: " | ".join(x))
+            
+            st.dataframe(df, use_container_width=True)
+            st.success("Save these 6 numbers (X, Y, W, H, OffX, OffY) and you never have to calibrate again!")
 
 if __name__ == "__main__":
     main()
