@@ -6,42 +6,44 @@ from PIL import Image, ImageDraw
 
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
+# --- CACHED FUNCTIONS (Prevents Crashes) ---
+@st.cache_data
+def get_pdf_page_image(file_content):
+    """
+    Converts PDF to image ONCE and caches it.
+    We use 72 DPI (Standard) to save RAM.
+    """
+    with pdfplumber.open(file_content) as pdf:
+        page0 = pdf.pages[0]
+        # 72 DPI matches PDF points exactly (Scale = 1.0)
+        # This simplifies math and saves massive memory
+        return page0.to_image(resolution=72).original, page0.width, page0.height
+
+# --- MAIN CLASS ---
 class VolleySheetExtractor:
     def __init__(self, pdf_file):
         self.pdf = pdfplumber.open(pdf_file)
         self.page0 = self.pdf.pages[0]
-        # REVERTED TO 150 DPI so your previous coordinates (264, 186) work again!
-        self.img_scale = 150 
-        self.scale_factor = 72 / 150
+        # Since we use 72 DPI, Pixels == Points. Scale factor is 1.
+        self.scale_factor = 1.0 
 
-    def get_page_image(self):
-        return self.page0.to_image(resolution=self.img_scale).original
-
-    def _scale_coords(self, val):
-        return val * self.scale_factor
-
-    def get_cell_debug(self, base_x, base_y, w, h, offset_x, offset_y, target_set, target_team, target_pos_idx):
+    def get_cell_debug(self, base_img, base_x, base_y, w, h, offset_x, offset_y, target_set, target_team, target_pos_idx):
         set_y_px = base_y + ((target_set - 1) * offset_y)
         team_x_px = base_x if target_team == "Left" else base_x + offset_x
         cell_x_px = team_x_px + (target_pos_idx * w)
         
-        pdf_x = self._scale_coords(cell_x_px)
-        pdf_y = self._scale_coords(set_y_px)
-        pdf_w = self._scale_coords(w)
-        pdf_h = self._scale_coords(h)
+        # Crop Box (Top 40% to ignore points grid)
+        bbox = (cell_x_px, set_y_px, cell_x_px + w, set_y_px + (h * 0.4))
         
-        # Crop Box (Strict Top-Half Crop)
-        bbox_text = (pdf_x, pdf_y, pdf_x + pdf_w, pdf_y + (pdf_h * 0.45))
-        
-        # Image Crop 
+        # Visual Crop
         img_bbox = (cell_x_px, set_y_px, cell_x_px + w, set_y_px + h)
         try:
-            cell_img = self.get_page_image().crop(img_bbox)
+            cell_img = base_img.crop(img_bbox)
         except:
             cell_img = Image.new('RGB', (50, 50), color='gray')
 
         try:
-            crop = self.page0.crop(bbox_text)
+            crop = self.page0.crop(bbox)
             raw_text = crop.extract_text()
         except:
             raw_text = "Error"
@@ -51,34 +53,30 @@ class VolleySheetExtractor:
     def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y):
         match_data = []
         for set_num in range(1, 6): 
-            current_y_pixels = base_y + ((set_num - 1) * offset_y)
+            current_y = base_y + ((set_num - 1) * offset_y)
             
             # LEFT
-            row_l = self._extract_row(base_x, current_y_pixels, w, h)
-            if row_l: # Only add if we found data
+            row_l = self._extract_row(base_x, current_y, w, h)
+            if row_l: 
                 match_data.append({"Set": set_num, "Team": "Left Grid", "Starters": row_l})
             
             # RIGHT
-            row_r = self._extract_row(base_x + offset_x, current_y_pixels, w, h)
+            row_r = self._extract_row(base_x + offset_x, current_y, w, h)
             if row_r:
                 match_data.append({"Set": set_num, "Team": "Right Grid", "Starters": row_r})
             
         return match_data
 
-    def _extract_row(self, start_x_px, start_y_px, w_px, h_px):
+    def _extract_row(self, start_x, start_y, w, h):
         row_data = []
-        pdf_y = self._scale_coords(start_y_px)
-        pdf_h = self._scale_coords(h_px)
         
-        if pdf_y + pdf_h > self.page0.height: return None # Stop if out of bounds
+        if start_y + h > self.page0.height: return None
 
         for i in range(6):
-            x_px = start_x_px + (i * w_px)
-            pdf_x = self._scale_coords(x_px)
-            pdf_w = self._scale_coords(w_px)
+            x = start_x + (i * w)
             
-            # Top 45% crop
-            bbox = (pdf_x + 1, pdf_y + 1, pdf_x + pdf_w - 1, pdf_y + (pdf_h * 0.45))
+            # Strict top 40% crop
+            bbox = (x + 1, start_y + 1, x + w - 1, start_y + (h * 0.4))
             
             try:
                 text = self.page0.crop(bbox).extract_text()
@@ -94,28 +92,25 @@ class VolleySheetExtractor:
             except:
                 row_data.append("?")
         
-        # If the row is empty or all ?, return None
-        if all(x == "?" for x in row_data):
-            return None
-            
+        if all(x == "?" for x in row_data): return None
         return row_data
 
     def draw_full_grid(self, img, bx, by, w, h, off_x, off_y):
-        draw = ImageDraw.Draw(img)
-        # Draw 4 sets (Set 5 layout is often different)
+        # Create a copy to draw on so we don't mutate the cached image
+        img_copy = img.copy()
+        draw = ImageDraw.Draw(img_copy)
+        
         for s in range(4):
             cur_y = by + (s * off_y)
-            
-            # Left Team (Red)
+            # Left (Red)
             for i in range(6):
-                draw.rectangle([bx + (i*w), cur_y, bx + (i*w) + w, cur_y + h], outline="red", width=3)
-            
-            # Right Team (Blue)
+                draw.rectangle([bx + (i*w), cur_y, bx + (i*w) + w, cur_y + h], outline="red", width=2)
+            # Right (Blue)
             if off_x > 0:
                 cur_x = bx + off_x
                 for i in range(6):
-                    draw.rectangle([cur_x + (i*w), cur_y, cur_x + (i*w) + w, cur_y + h], outline="blue", width=3)
-        return img
+                    draw.rectangle([cur_x + (i*w), cur_y, cur_x + (i*w) + w, cur_y + h], outline="blue", width=2)
+        return img_copy
 
 def main():
     st.title("🏐 VolleyStats: Visual Calibrator")
@@ -127,25 +122,32 @@ def main():
         st.info("Upload PDF to begin.")
         return
 
+    # Initialize Extractor
     extractor = VolleySheetExtractor(uploaded_file)
+    
+    # --- CACHED IMAGE GENERATION (CRITICAL FOR PERFORMANCE) ---
+    # We pass the file object wrapper to cache properly
+    base_img, p_width, p_height = get_pdf_page_image(uploaded_file)
 
     tab1, tab2, tab3 = st.tabs(["📐 Align Grid", "🔍 X-Ray Inspector", "📥 Extract Data"])
 
     with tab1:
-        st.write("### 1. Match the Red Boxes to Set 1 Starters")
-        st.info("If the boxes are too far RIGHT, decrease 'Start X'.")
+        st.write("### 1. Global Calibration")
+        st.info("Resolution set to 72 DPI for stability. Values are now 1:1 with PDF points.")
+        
         c1, c2 = st.columns(2)
         with c1:
-            base_x = st.number_input("Start X", value=264, step=2)
-            base_y = st.number_input("Start Y", value=186, step=2)
-            w = st.number_input("Cell Width", value=50)
-            h = st.number_input("Cell Height", value=50)
+            # Note: Default values adjusted for 72 DPI (approx half of 150 DPI values)
+            # Previous X=264 (at 150DPI) -> ~127 (at 72DPI)
+            base_x = st.number_input("Start X", value=127, step=1)
+            base_y = st.number_input("Start Y", value=90, step=1)
+            w = st.number_input("Cell Width", value=24, step=1)
+            h = st.number_input("Cell Height", value=24, step=1)
         with c2:
-            offset_x = st.number_input("Right Offset", value=880) 
-            offset_y = st.number_input("Down Offset", value=330)
+            offset_x = st.number_input("Right Offset", value=422, step=1) 
+            offset_y = st.number_input("Down Offset", value=158, step=1)
 
-        img = extractor.get_page_image()
-        debug_img = extractor.draw_full_grid(img, base_x, base_y, w, h, offset_x, offset_y)
+        debug_img = extractor.draw_full_grid(base_img, base_x, base_y, w, h, offset_x, offset_y)
         st.image(debug_img, use_container_width=True)
 
     with tab2:
@@ -159,19 +161,19 @@ def main():
         pos_map = {"I": 0, "II": 1, "III": 2, "IV": 3, "V": 4, "VI": 5}
         
         cell_img, raw_txt = extractor.get_cell_debug(
-            base_x, base_y, w, h, offset_x, offset_y, 
+            base_img, base_x, base_y, w, h, offset_x, offset_y, 
             inspect_set, inspect_team, pos_map[inspect_pos]
         )
         
         c_img, c_txt = st.columns(2)
         with c_img:
-            st.image(cell_img, width=150, caption=f"Computer View")
+            st.image(cell_img, width=100, caption="Cell View")
         with c_txt:
-            st.metric("Detected Number", f"'{raw_txt}'")
+            st.metric("Cleaned Text", f"'{raw_txt}'")
             if raw_txt.strip().isdigit():
                 st.success("✅ Valid!")
             else:
-                st.warning("⚠️ Reading Garbage")
+                st.warning("⚠️ Empty/Garbage")
 
     with tab3:
         if st.button("🚀 Extract All"):
@@ -181,7 +183,7 @@ def main():
                 df['Starters'] = df['Starters'].apply(lambda x: " | ".join(x))
                 st.dataframe(df, use_container_width=True)
             else:
-                st.error("No valid data found. Check your alignment in Tab 1.")
+                st.error("No valid data found. Check Alignment.")
 
 if __name__ == "__main__":
     main()
