@@ -2,154 +2,156 @@ import streamlit as st
 import pdfplumber
 import pandas as pd
 import re
+from PIL import Image, ImageDraw
 
-st.set_page_config(page_title="VolleyStats Auto-Pilot", page_icon="🏐", layout="wide")
+st.set_page_config(page_title="VolleyStats Golden", page_icon="🏐", layout="wide")
 
-class AutoVolleyExtractor:
+# --- OPTIMIZED IMAGE LOADER (100 DPI) ---
+@st.cache_data(show_spinner=False)
+def load_page_image(file_bytes):
+    with pdfplumber.open(file_bytes) as pdf:
+        page0 = pdf.pages[0]
+        # 100 DPI is the sweet spot we found
+        img = page0.to_image(resolution=100).original
+        return img, page0.width, page0.height
+
+class VolleySheetExtractor:
     def __init__(self, pdf_file):
-        self.pdf = pdfplumber.open(pdf_file)
-        self.page = self.pdf.pages[0]
+        self.pdf_file = pdf_file
+        self.scale_factor = 72 / 100 # Convert 100 DPI pixels to 72 DPI PDF points
 
-    def find_starters_automatically(self):
-        """
-        Detects the starting lineup by finding the grid structure 
-        defined by horizontal and vertical lines.
-        """
-        # 1. Extract all lines (horizontal and vertical)
-        lines = self.page.lines
-        
-        # 2. Filter for vertical lines that separate player columns
-        # FFVolley columns are usually ~30-40pts wide.
-        v_lines = sorted([l['x0'] for l in lines if l['height'] > 10])
-        
-        # Cluster lines to find the main grid columns
-        # We look for sequences of lines that are roughly equidistant
-        columns = []
-        if v_lines:
-            current_group = [v_lines[0]]
-            for x in v_lines[1:]:
-                if x - current_group[-1] > 5: # New line if >5pts away
-                    if len(current_group) > 0:
-                        columns.append(sum(current_group)/len(current_group)) # Avg x
-                    current_group = [x]
-                else:
-                    current_group.append(x)
-            columns.append(sum(current_group)/len(current_group))
-
-        # 3. Identify the "6-column" structures
-        # A valid lineup grid will have 7 vertical lines (borders + 5 separators)
-        valid_grids = []
-        for i in range(len(columns) - 6):
-            # Check if these 7 lines form 6 cells of roughly equal width
-            subset = columns[i:i+7]
-            widths = [subset[j+1] - subset[j] for j in range(6)]
-            avg_w = sum(widths) / 6
-            
-            # If deviation is low, it's a grid!
-            if all(abs(w - avg_w) < 5 for w in widths):
-                valid_grids.append({
-                    "x_start": subset[0],
-                    "cell_width": avg_w,
-                    "cols": subset
-                })
-
-        # 4. Find the Rows (Horizontal Lines) relative to "Set" headers
-        # We search for text "I", "II", "III" which are headers for the grid
-        words = self.page.extract_words()
-        headers = [w for w in words if w['text'] in ['I', 'II', 'III', 'IV', 'V', 'VI']]
-        
-        if not headers:
-            return pd.DataFrame()
-
-        # Group headers by Y position to find the rows
-        # Sort by Y top
-        headers.sort(key=lambda w: w['top'])
-        
-        # The starters are usually just BELOW these headers
+    def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y, p_height):
         match_data = []
         
-        # Iterate through unique Y levels of headers to find each "Set" block
-        # We group headers that are on the same line (within 5px)
-        rows = []
-        if headers:
-            current_row = [headers[0]]
-            for h in headers[1:]:
-                if abs(h['top'] - current_row[-1]['top']) < 5:
-                    current_row.append(h)
-                else:
-                    rows.append(current_row)
-                    current_row = [h]
-            rows.append(current_row)
-
-        # For each header row found (representing a Set), try to read the numbers below it
-        for i, row in enumerate(rows):
-            # Use the first header (I) to define the top Y
-            # Starters are usually in the box immediately below the header
-            header_bottom = row[0]['bottom']
-            # Expected cell height is approx 25-30 pts
-            cell_h = 28 
+        with pdfplumber.open(self.pdf_file) as pdf:
+            page = pdf.pages[0]
             
-            # Determine X coordinates from our line detection (or fall back to header position)
-            # We look for the grid that matches this row's X position
-            best_grid = None
-            header_x_center = sum(r['x0'] for r in row) / len(row)
-            
-            for grid in valid_grids:
-                grid_center = grid['x_start'] + (grid['cell_width'] * 3)
-                if abs(grid_center - header_x_center) < 100:
-                    best_grid = grid
-                    break
-            
-            if best_grid:
-                # Extract!
-                starters = []
-                for col_idx in range(6):
-                    x0 = best_grid['cols'][col_idx]
-                    x1 = best_grid['cols'][col_idx+1]
-                    
-                    # Define box below header
-                    bbox = (x0, header_bottom + 2, x1, header_bottom + cell_h)
-                    
-                    try:
-                        text = self.page.crop(bbox).extract_text()
-                        val = "?"
-                        if text:
-                            # Clean numbers
-                            clean = re.sub(r'[^0-9]', '', text)
-                            if clean.isdigit() and len(clean) <= 2:
-                                val = clean
-                        starters.append(val)
-                    except:
-                        starters.append("?")
+            for set_num in range(1, 6): 
+                current_y = base_y + ((set_num - 1) * offset_y)
                 
-                if any(s != "?" for s in starters):
-                    # Guessing Set Number and Team based on position
-                    # Left side grids are usually X < 300
-                    team = "Left" if best_grid['x_start'] < 300 else "Right"
-                    match_data.append({
-                        "Team": team,
-                        "Starters": " | ".join(starters)
-                    })
+                # LEFT GRID
+                if current_y + h < p_height:
+                    row_l = self._extract_row(page, current_y, base_x, w, h)
+                    if row_l: match_data.append({"Set": set_num, "Team": "Left Grid", "Starters": row_l})
+                
+                # RIGHT GRID
+                if current_y + h < p_height:
+                    row_r = self._extract_row(page, current_y, base_x + offset_x, w, h)
+                    if row_r: match_data.append({"Set": set_num, "Team": "Right Grid", "Starters": row_r})
+                    
+        return match_data
 
-        return pd.DataFrame(match_data)
+    def _extract_row(self, page, top_y, start_x, w, h):
+        row_data = []
+        scale = self.scale_factor
+        
+        for i in range(6):
+            # DRIFT CORRECTION: Add 0.5px per column to account for black grid lines
+            drift = i * 0.5
+            px_x = start_x + (i * w) + drift
+            
+            # Convert to PDF Points
+            pdf_x0 = px_x * scale
+            pdf_top = top_y * scale
+            pdf_x1 = (px_x + w) * scale
+            
+            # STRICT HEIGHT: Ignore bottom half of box (only read top 28px converted)
+            pdf_bottom = pdf_top + (28 * scale)
+            
+            bbox = (pdf_x0 + 1, pdf_top + 1, pdf_x1 - 1, pdf_bottom)
+            
+            try:
+                text = page.crop(bbox).extract_text()
+                val = "?"
+                if text:
+                    for token in text.split():
+                        clean = re.sub(r'[^0-9]', '', token)
+                        # Only accept 1 or 2 digit numbers (Player Jersey)
+                        if clean.isdigit() and len(clean) <= 2:
+                            val = clean
+                            break
+                row_data.append(val)
+            except:
+                row_data.append("?")
+        
+        if all(x == "?" for x in row_data): return None
+        return row_data
+
+def draw_grid_on_image(base_img, bx, by, w, h, off_x, off_y):
+    img_copy = base_img.copy()
+    draw = ImageDraw.Draw(img_copy)
+    for s in range(4):
+        cur_y = by + (s * off_y)
+        # Left (Red)
+        for i in range(6):
+            drift = i * 0.5
+            x = bx + (i * w) + drift
+            draw.rectangle([x, cur_y, x + w, cur_y + h], outline="red", width=2)
+        # Right (Blue)
+        if off_x > 0:
+            cur_x = bx + off_x
+            for i in range(6):
+                drift = i * 0.5
+                x = cur_x + (i * w) + drift
+                draw.rectangle([x, cur_y, x + w, cur_y + h], outline="blue", width=2)
+    return img_copy
 
 def main():
-    st.title("🏐 VolleyStats: Auto-Pilot")
-    st.markdown("**No calibration required.** This tool detects the grid lines automatically.")
+    st.title("🏐 VolleyStats: Golden Config")
     
-    uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
+    with st.sidebar:
+        uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
+        
+    if not uploaded_file:
+        st.info("Upload PDF to begin.")
+        return
 
-    if uploaded_file:
-        if st.button("🚀 Analyze Automatically"):
-            with st.spinner("Scanning document structure..."):
-                extractor = AutoVolleyExtractor(uploaded_file)
-                df = extractor.find_starters_automatically()
+    try:
+        base_img, p_width, p_height = load_page_image(uploaded_file)
+    except:
+        st.error("Error loading PDF.")
+        return
+
+    extractor = VolleySheetExtractor(uploaded_file)
+
+    tab1, tab2 = st.tabs(["✅ Verify Alignment", "📊 Match Data"])
+
+    with tab1:
+        st.write("### Golden Coordinates (Pre-Loaded)")
+        st.info("These match your screenshots perfectly. Just verify the Red/Blue boxes.")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            # EXACT VALUES FROM YOUR SCREENSHOTS
+            base_x = st.number_input("Start X", value=171) 
+            base_y = st.number_input("Start Y", value=122)
+            w = st.number_input("Cell Width", value=31)
+            h = st.number_input("Cell Height", value=28) # Shortened to ignore points below
+        with c2:
+            offset_x = st.number_input("Right Offset", value=685) 
+            offset_y = st.number_input("Down Offset", value=210)
+
+        debug_img = draw_grid_on_image(base_img, base_x, base_y, w, h, offset_x, offset_y)
+        st.image(debug_img, use_container_width=True)
+
+    with tab2:
+        if st.button("🚀 Extract All Data"):
+            data = extractor.extract_full_match(base_x, base_y, w, h, offset_x, offset_y, p_height)
+            
+            if data:
+                df = pd.DataFrame(data)
                 
-                if not df.empty:
-                    st.success(f"Found {len(df)} lineups automatically!")
-                    st.table(df)
-                else:
-                    st.error("Could not auto-detect grid lines. The PDF might be scanned too lightly.")
+                # Formatting
+                df['Starters'] = df['Starters'].apply(lambda x: " | ".join(x))
+                
+                st.success("Extraction Successful!")
+                st.dataframe(df, use_container_width=True)
+                
+                # Download CSV option
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button("Download CSV", csv, "match_rotations.csv", "text/csv")
+            else:
+                st.error("No data found. Check Tab 1.")
 
 if __name__ == "__main__":
     main()
