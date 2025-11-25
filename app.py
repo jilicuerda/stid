@@ -1,136 +1,282 @@
 import streamlit as st
+import pdfplumber
 import pandas as pd
+import pypdfium2 as pdfium
+import re
+import gc
+import plotly.express as px
 import plotly.graph_objects as go
-
-# Import des modules locaux
-from src.extractor import get_page_image, extract_match_info, VolleySheetExtractor
-from src.analytics import calculate_player_stats, analyze_money_time, format_export_data
-from src.visualizer import draw_alignment_grid, draw_court_view
+from PIL import Image, ImageDraw
 
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
-def main():
-    st.title("🏐 VolleyStats Pro : Rapport Complet")
+# ==========================================
+# 1. MOTEUR D'EXTRACTION (Lecture & Image)
+# ==========================================
 
-    # --- SIDEBAR ---
+@st.cache_data(show_spinner=False)
+def get_page_image(file_bytes):
+    """Rendu haute performance du PDF en Image (C++ Engine)."""
+    pdf = pdfium.PdfDocument(file_bytes)
+    page = pdf[0]
+    scale = 1.0 # 72 DPI (Standard PDF Points)
+    bitmap = page.render(scale=scale)
+    pil_image = bitmap.to_pil()
+    page.close()
+    pdf.close()
+    gc.collect()
+    return pil_image, scale
+
+def extract_match_info(file):
+    """Extrait les Noms, les Scores et la Durée."""
+    text = ""
+    with pdfplumber.open(file) as pdf:
+        text = pdf.pages[0].extract_text()
+    
+    lines = text.split('\n')
+    
+    # A. Détection des Équipes
+    potential_names = []
+    for line in lines:
+        if "Début:" in line:
+            parts = line.split("Début:")
+            for part in parts[:-1]:
+                if "Fin:" in part: part = part.split("Fin:")[-1]
+                part = re.sub(r'\d{2}:\d{2}\s*R?', '', part)
+                clean_name = re.sub(r'\b(SA|SB|S|R)\b', '', part)
+                clean_name = re.sub(r'^[^A-Z]+|[^A-Z]+$', '', clean_name).strip()
+                if len(clean_name) > 3: potential_names.append(clean_name)
+
+    unique_names = list(dict.fromkeys(potential_names))
+    t_home = unique_names[1] if len(unique_names) > 1 else "Home Team"
+    t_away = unique_names[0] if len(unique_names) > 0 else "Away Team"
+    
+    # B. Détection Scores
+    scores = []
+    duration_pattern = re.compile(r"(\d{1,3})\s*['’′`]")
+    found_table = False
+    
+    for line in lines:
+        if "RESULTATS" in line: found_table = True
+        if "Vainqueur" in line: found_table = False
+        
+        if found_table:
+            match = duration_pattern.search(line)
+            if match:
+                duration_val = int(match.group(1))
+                if duration_val < 60: # Ignorer la durée totale du match
+                    parts = line.split(match.group(0))
+                    if len(parts) >= 2:
+                        left = re.findall(r'\d+', parts[0])
+                        right = re.findall(r'\d+', parts[1])
+                        if len(left) >= 2 and len(right) >= 1:
+                            try:
+                                scores.append({
+                                    "Home": int(left[-2]), 
+                                    "Away": int(right[0]),
+                                    "Duration": duration_val
+                                })
+                            except: pass
+    return t_home, t_away, scores
+
+class VolleySheetExtractor:
+    def __init__(self, pdf_file):
+        self.pdf_file = pdf_file
+
+    def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y, p_height):
+        match_data = []
+        with pdfplumber.open(self.pdf_file) as pdf:
+            page = pdf.pages[0]
+            for set_num in range(1, 6): 
+                current_y = base_y + ((set_num - 1) * offset_y)
+                if current_y + h < p_height:
+                    # Gauche
+                    row_l = self._extract_row(page, current_y, base_x, w, h)
+                    if row_l: match_data.append({"Set": set_num, "Team": "Home", "Starters": row_l})
+                    # Droite
+                    row_r = self._extract_row(page, current_y, base_x + offset_x, w, h)
+                    if row_r: match_data.append({"Set": set_num, "Team": "Away", "Starters": row_r})
+        gc.collect()
+        return match_data
+
+    def _extract_row(self, page, top_y, start_x, w, h):
+        row_data = []
+        for i in range(6):
+            drift = i * 0.3
+            px_x = start_x + (i * w) + drift
+            bbox = (px_x - 3, top_y, px_x + w + 3, top_y + (h * 0.8))
+            try:
+                text = page.crop(bbox).extract_text()
+                val = "?"
+                if text:
+                    for token in text.split():
+                        clean = re.sub(r'[^0-9]', '', token)
+                        if clean.isdigit() and len(clean) <= 2:
+                            val = clean; break
+                row_data.append(val)
+            except: row_data.append("?")
+        if all(x == "?" for x in row_data): return None
+        return row_data
+
+# ==========================================
+# 2. ANALYSE & STATISTIQUES
+# ==========================================
+
+def calculate_player_stats(df, scores):
+    stats = {}
+    set_winners = {i+1: ("Home" if s['Home'] > s['Away'] else "Away") for i, s in enumerate(scores)}
+
+    for _, row in df.iterrows():
+        team = row['Team']
+        set_n = row['Set']
+        if set_n in set_winners:
+            won = (team == set_winners[set_n])
+            for p in row['Starters']:
+                if p.isdigit():
+                    if p not in stats: stats[p] = {'team': team, 'played': 0, 'won': 0}
+                    stats[p]['played'] += 1
+                    if won: stats[p]['won'] += 1
+    
+    data = []
+    for p, s in stats.items():
+        pct = (s['won']/s['played'])*100 if s['played'] > 0 else 0
+        data.append({"Joueur": f"#{p}", "Équipe": s['team'], "Sets": s['played'], "Win %": round(pct, 1)})
+    
+    if not data: return pd.DataFrame()
+    return pd.DataFrame(data).sort_values(['Équipe', 'Win %'], ascending=[True, False])
+
+def analyze_money_time(scores, t_home, t_away):
+    analysis = []
+    clutch_stats = {t_home: 0, t_away: 0}
+    
+    for i, s in enumerate(scores):
+        diff = abs(s['Home'] - s['Away'])
+        winner = t_home if s['Home'] > s['Away'] else t_away
+        
+        if max(s['Home'], s['Away']) >= 20 and diff <= 3:
+            clutch_stats[winner] += 1
+            analysis.append(f"✅ Set {i+1} ({s['Home']}-{s['Away']}) : Gagné par **{winner}** (Money Time).")
+        elif diff > 5:
+            analysis.append(f"⚠️ Set {i+1} ({s['Home']}-{s['Away']}) : Victoire large de {winner}.")
+        else:
+            analysis.append(f"ℹ️ Set {i+1} ({s['Home']}-{s['Away']}) : Victoire standard de {winner}.")
+            
+    return analysis, clutch_stats
+
+# ==========================================
+# 3. VISUALISATION
+# ==========================================
+
+def draw_court_view(starters):
+    safe = [s if s != "?" else "-" for s in starters]
+    while len(safe) < 6: safe.append("-")
+    grid = [[safe[3], safe[2], safe[1]], [safe[4], safe[5], safe[0]]]
+    
+    fig = px.imshow(grid, text_auto=True, color_continuous_scale='Blues',
+                    x=['Gauche', 'Centre', 'Droite'], y=['Avant', 'Arrière'])
+    fig.update_layout(coloraxis_showscale=False, height=300, margin=dict(l=10, r=10, t=10, b=10))
+    fig.update_traces(textfont_size=24)
+    return fig
+
+def draw_grid(base_img, bx, by, w, h, off_x, off_y):
+    img = base_img.copy()
+    draw = ImageDraw.Draw(img)
+    for s in range(4):
+        y = by + (s * off_y)
+        for i in range(6):
+            d = i * 0.3
+            draw.rectangle([bx+(i*w)+d, y, bx+(i*w)+d+w, y+h], outline="red", width=2)
+            draw.rectangle([bx+off_x+(i*w)+d, y, bx+off_x+(i*w)+d+w, y+h], outline="blue", width=2)
+    return img
+
+# ==========================================
+# 4. APPLICATION PRINCIPALE
+# ==========================================
+
+def main():
+    st.title("🏐 VolleyStats Pro")
+
     with st.sidebar:
-        uploaded_file = st.file_uploader("Importer Feuille de Match (PDF)", type="pdf")
+        uploaded_file = st.file_uploader("Importer PDF", type="pdf")
         with st.expander("⚙️ Calibration"):
-            base_x = st.number_input("X Départ", 123)
-            base_y = st.number_input("Y Départ", 88)
-            w = st.number_input("Largeur Case", 23)
-            h = st.number_input("Hauteur Case", 20)
-            off_x = st.number_input("Décalage Droite", 492)
-            off_y = st.number_input("Décalage Bas", 151)
+            base_x = st.number_input("X", 123); base_y = st.number_input("Y", 88)
+            w = st.number_input("W", 23); h = st.number_input("H", 20)
+            off_x = st.number_input("Right Offset", 492)
+            off_y = st.number_input("Down Offset", 151)
 
     if not uploaded_file:
-        st.info("En attente du fichier PDF...")
+        st.info("Veuillez importer un fichier.")
         return
 
-    # --- 1. EXTRACTION ---
     extractor = VolleySheetExtractor(uploaded_file)
     t_home, t_away, scores = extract_match_info(uploaded_file)
     
-    with st.spinner("Analyse tactique en cours..."):
-        raw_data = extractor.extract_full_match(base_x, base_y, w, h, offset_x, offset_y, 842)
-        df = pd.DataFrame(raw_data)
+    with st.spinner("Analyse en cours..."):
+        lineups = extractor.extract_full_match(base_x, base_y, w, h, off_x, off_y, 842)
+        df = pd.DataFrame(lineups)
 
     if df.empty:
-        st.error("Données illisibles.")
+        st.error("Données non trouvées.")
         return
 
-    # --- 2. SCOREBOARD ---
+    # Scoreboard
     h_wins = sum(1 for s in scores if s['Home'] > s['Away'])
     a_wins = sum(1 for s in scores if s['Away'] > s['Home'])
-    
     c1, c2, c3 = st.columns([2, 1, 2])
     c1.metric("DOMICILE", t_home)
     c3.metric("EXTÉRIEUR", t_away)
     c2.markdown(f"<h1 style='text-align: center; color: #FF4B4B;'>{h_wins} - {a_wins}</h1>", unsafe_allow_html=True)
 
-    # --- 3. ANALYSE DÉTAILLÉE (Les 5 Axes) ---
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "1. Money Time", 
-        "2. Stats Joueurs", 
-        "3. Rotations", 
-        "4. Physique & Durée", 
-        "5. Export & Vérif"
-    ])
+    # Onglets
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["1. Money Time", "2. Joueurs", "3. Rotations", "4. Physique", "5. Export"])
 
-    # AXE 1 : MONEY TIME
     with tab1:
-        st.header("Gestion des fins de sets")
         if scores:
-            analysis, clutch_stats = analyze_money_time(scores, t_home, t_away)
-            col_mt1, col_mt2 = st.columns(2)
-            col_mt1.metric(f"Sets Serrés ({t_home})", clutch_stats.get(t_home, 0))
-            col_mt2.metric(f"Sets Serrés ({t_away})", clutch_stats.get(t_away, 0))
-            
-            st.write("##### Analyse Chronologique :")
-            for item in analysis:
-                st.write(item)
-        else:
-            st.warning("Scores non détectés.")
+            analysis, clutch = analyze_money_time(scores, t_home, t_away)
+            col1, col2 = st.columns(2)
+            col1.metric(f"Sets Serrés ({t_home})", clutch.get(t_home, 0))
+            col2.metric(f"Sets Serrés ({t_away})", clutch.get(t_away, 0))
+            for item in analysis: st.write(item)
+        else: st.warning("Scores indisponibles.")
 
-    # AXE 2 : STATS JOUEURS (Win %)
     with tab2:
-        st.header("Impact des Titulaires")
         if scores:
-            stats_df = calculate_player_stats(df, scores)
-            if not stats_df.empty:
+            stats = calculate_player_stats(df, scores)
+            if not stats.empty:
                 ca, cb = st.columns(2)
-                with ca: 
-                    st.subheader(f"{t_home}")
-                    st.dataframe(stats_df[stats_df['Équipe']=="Home"], use_container_width=True)
-                with cb: 
-                    st.subheader(f"{t_away}")
-                    st.dataframe(stats_df[stats_df['Équipe']=="Away"], use_container_width=True)
-        else:
-            st.info("Nécessite les scores pour calculer l'impact.")
+                with ca: st.dataframe(stats[stats['Équipe']=="Home"], use_container_width=True)
+                with cb: st.dataframe(stats[stats['Équipe']=="Away"], use_container_width=True)
 
-    # AXE 3 : ROTATIONS VISUELLES
     with tab3:
-        st.header("Cartographie des Rotations")
-        col_s, col_t = st.columns(2)
-        sel_set = col_s.selectbox("Set", df['Set'].unique())
-        sel_team = col_t.selectbox("Équipe", ["Home", "Away"])
-        
+        c_s, c_t = st.columns(2)
+        sel_set = c_s.selectbox("Set", df['Set'].unique())
+        sel_team = c_t.selectbox("Équipe", ["Home", "Away"])
         row = df[(df['Set'] == sel_set) & (df['Team'] == sel_team)]
         if not row.empty:
-            starters = row.iloc[0]['Starters']
-            st.plotly_chart(draw_court_view(starters), use_container_width=False)
-            
+            st.plotly_chart(draw_court_view(row.iloc[0]['Starters']), use_container_width=False)
+            st.markdown("
 
-#[Image of volleyball rotation diagram]
+[Image of volleyball rotation diagram]
+") # Ceci est un tag instructionnel pour l'IA, pas du code
 
-        else:
-            st.info("Pas de données.")
-
-    # AXE 4 : PHYSIQUE & DURÉE
     with tab4:
-        st.header("Intensité du Match")
-        # Récupération Durée (si dispo dans scores, sinon simulée pour démo structurelle)
-        # Note: Le PDF actuel ne donne pas la durée facilement, on met un placeholder intelligent
-        total_points = sum(s['Home'] + s['Away'] for s in scores)
-        est_duration = int(total_points * 1.5) # Est. 1.5 min par point
-        
-        c_d1, c_d2 = st.columns(2)
-        c_d1.metric("Points Totaux Joués", total_points)
-        c_d2.metric("Durée Estimée", f"~{est_duration // 60}h {est_duration % 60}min")
-        
-        st.bar_chart(pd.DataFrame([s['Home']+s['Away'] for s in scores], columns=["Intensité (Points/Set)"]))
+        if scores:
+            durations = [s['Duration'] for s in scores if 'Duration' in s]
+            if durations:
+                st.metric("Durée Totale", f"{sum(durations)} min")
+                st.bar_chart(pd.DataFrame({"Set": range(1, len(durations)+1), "Minutes": durations}).set_index("Set"))
 
-    # AXE 5 : EXPORT
     with tab5:
         try:
             f_bytes = uploaded_file.getvalue()
             img, _ = get_page_image(f_bytes)
-            st.image(draw_alignment_grid(img, base_x, base_y, w, h, offset_x, offset_y), caption="Calibration")
+            st.image(draw_grid(img, base_x, base_y, w, h, off_x, off_y))
         except: pass
         
-        final_df = format_export_data(df)
-        st.dataframe(final_df)
-        st.download_button("Télécharger CSV", final_df.to_csv(index=False).encode('utf-8'), "match_stats.csv", "text/csv")
+        export = df.copy()
+        cols = pd.DataFrame(export['Starters'].tolist(), columns=[f'Z{i+1}' for i in range(6)])
+        final = pd.concat([export[['Set', 'Team']], cols], axis=1)
+        st.download_button("Télécharger CSV", final.to_csv(index=False).encode('utf-8'), "match.csv", "text/csv")
 
 if __name__ == "__main__":
     main()
