@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw
 
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
-# --- CACHED FUNCTIONS (Prevents Crashes) ---
+# --- CRITICAL FIX: CACHING TO PREVENT CRASHES ---
 @st.cache_data
 def get_pdf_page_image(file_content):
     """
@@ -17,9 +17,8 @@ def get_pdf_page_image(file_content):
         page0 = pdf.pages[0]
         # 72 DPI matches PDF points exactly (Scale = 1.0)
         # This simplifies math and saves massive memory
-        return page0.to_image(resolution=72).original, page0.width, page0.height
+        return page0.to_image(resolution=72).original
 
-# --- MAIN CLASS ---
 class VolleySheetExtractor:
     def __init__(self, pdf_file):
         self.pdf = pdfplumber.open(pdf_file)
@@ -127,7 +126,7 @@ def main():
     
     # --- CACHED IMAGE GENERATION (CRITICAL FOR PERFORMANCE) ---
     # We pass the file object wrapper to cache properly
-    base_img, p_width, p_height = get_pdf_page_image(uploaded_file)
+    base_img = get_pdf_page_image(uploaded_file)
 
     tab1, tab2, tab3 = st.tabs(["📐 Align Grid", "🔍 X-Ray Inspector", "📥 Extract Data"])
 
@@ -148,7 +147,7 @@ def main():
             offset_y = st.number_input("Down Offset", value=158, step=1)
 
         debug_img = extractor.draw_full_grid(base_img, base_x, base_y, w, h, offset_x, offset_y)
-        st.image(debug_img, use_container_width=True)
+        st.image(debug_img, width=None) # Let Streamlit handle width
 
     with tab2:
         st.write("### 2. Check Specific Cells")
