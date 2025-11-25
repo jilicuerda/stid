@@ -61,6 +61,7 @@ def extract_match_info(file):
         
         if found_table:
             match = duration_pattern.search(line)
+            # Ensure we aren't reading the "Total Match Time" (usually > 60 mins)
             if match and int(match.group(1)) < 60:
                 parts = line.split(match.group(0))
                 if len(parts) >= 2:
@@ -68,7 +69,7 @@ def extract_match_info(file):
                     right = re.findall(r'\d+', parts[1])
                     if len(left) >= 2 and len(right) >= 1:
                         try:
-                            # Logic: Left=[-2], Right=[0]
+                            # Logic: Left=[-2] (Score), Right=[0] (Score)
                             scores.append({"Home": int(left[-2]), "Away": int(right[0])})
                         except: pass
     return team_home, team_away, scores
@@ -240,10 +241,6 @@ def main():
         if not row.empty:
             starters = row.iloc[0]['Starters']
             st.plotly_chart(draw_court(starters), use_container_width=False)
-            
-
-[Image of volleyball rotation diagram]
-
         else: st.info("No data.")
 
     with tab3:
