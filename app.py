@@ -257,7 +257,7 @@ def main():
             st.plotly_chart(draw_court_view(row.iloc[0]['Starters']), use_container_width=False)
             
 
-[Image of volleyball rotation diagram]
+#[Image of volleyball rotation diagram]
 
 
     with tab4:
@@ -281,3 +281,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
