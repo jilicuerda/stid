@@ -10,8 +10,8 @@ class VolleySheetExtractor:
     def __init__(self, pdf_file):
         self.pdf = pdfplumber.open(pdf_file)
         self.page0 = self.pdf.pages[0]
-        self.img_scale = 150 
-        self.scale_factor = 72 / 150
+        self.img_scale = 200 # Higher res for better inspection
+        self.scale_factor = 72 / 200
 
     def get_page_image(self):
         return self.page0.to_image(resolution=self.img_scale).original
@@ -19,85 +19,92 @@ class VolleySheetExtractor:
     def _scale_coords(self, val):
         return val * self.scale_factor
 
+    def get_cell_debug(self, base_x, base_y, w, h, offset_x, offset_y, target_set, target_team, target_pos_idx):
+        """Returns the cropped image and text for a SINGLE cell."""
+        
+        # Calculate Y for the Set
+        set_y_px = base_y + ((target_set - 1) * offset_y)
+        
+        # Calculate X for the Team
+        team_x_px = base_x if target_team == "Left" else base_x + offset_x
+        
+        # Calculate X for the Position (0-5)
+        cell_x_px = team_x_px + (target_pos_idx * w)
+        
+        # Scale to PDF Points
+        pdf_x = self._scale_coords(cell_x_px)
+        pdf_y = self._scale_coords(set_y_px)
+        pdf_w = self._scale_coords(w)
+        pdf_h = self._scale_coords(h)
+        
+        # Crop Box
+        bbox = (pdf_x, pdf_y, pdf_x + pdf_w, pdf_y + pdf_h)
+        
+        # 1. Get Image of crop
+        # We need to crop from the high-res image, so we convert bbox back to pixels roughly
+        img_bbox = (cell_x_px, set_y_px, cell_x_px + w, set_y_px + h)
+        cell_img = self.get_page_image().crop(img_bbox)
+        
+        # 2. Get Text
+        try:
+            crop = self.page0.crop(bbox)
+            raw_text = crop.extract_text()
+        except:
+            raw_text = "Error"
+            
+        return cell_img, raw_text
+
     def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y):
         match_data = []
-        
         for set_num in range(1, 6): 
             current_y_pixels = base_y + ((set_num - 1) * offset_y)
             
-            # --- TEAM A (LEFT) ---
-            team_a_starters = self._extract_row(base_x, current_y_pixels, w, h)
-            if team_a_starters:
-                match_data.append({
-                    "Set": set_num, "Team": "Left Grid", "Starters": team_a_starters
-                })
+            # LEFT
+            row_l = self._extract_row(base_x, current_y_pixels, w, h)
+            if any(x != "?" for x in row_l):
+                match_data.append({"Set": set_num, "Team": "Left Grid", "Starters": row_l})
             
-            # --- TEAM B (RIGHT) ---
-            team_b_x_pixels = base_x + offset_x
-            team_b_starters = self._extract_row(team_b_x_pixels, current_y_pixels, w, h)
-            if team_b_starters:
-                match_data.append({
-                    "Set": set_num, "Team": "Right Grid", "Starters": team_b_starters
-                })
+            # RIGHT
+            row_r = self._extract_row(base_x + offset_x, current_y_pixels, w, h)
+            if any(x != "?" for x in row_r):
+                match_data.append({"Set": set_num, "Team": "Right Grid", "Starters": row_r})
             
         return match_data
 
     def _extract_row(self, start_x_px, start_y_px, w_px, h_px):
-        """Helper to extract 6 grid cells with SMART CLEANING."""
         row_data = []
-        
         pdf_y = self._scale_coords(start_y_px)
         pdf_h = self._scale_coords(h_px)
         
-        if pdf_y + pdf_h > self.page0.height:
-            return []
+        if pdf_y + pdf_h > self.page0.height: return ["?"] * 6
 
         for i in range(6):
             x_px = start_x_px + (i * w_px)
             pdf_x = self._scale_coords(x_px)
             pdf_w = self._scale_coords(w_px)
-            
-            # Crop Box: Shrink slightly (2pts) to avoid borders
             bbox = (pdf_x + 2, pdf_y + 2, pdf_x + pdf_w - 2, pdf_y + pdf_h - 2)
             
             try:
-                crop = self.page0.crop(bbox)
-                text = crop.extract_text()
-                
-                # --- NEW CLEANING LOGIC ---
+                text = self.page0.crop(bbox).extract_text()
                 val = "?"
                 if text:
-                    # 1. Split by whitespace or newlines
                     tokens = text.split()
-                    
-                    # 2. Find the first token that is a valid Jersey Number (1-99)
                     for token in tokens:
-                        # Remove non-digits
-                        clean_token = re.sub(r'[^0-9]', '', token)
-                        
-                        # Verify it looks like a player number (1 or 2 digits)
-                        if clean_token.isdigit() and len(clean_token) <= 2:
-                            val = clean_token
-                            break # Found the top number (Starter), stop looking!
-                
+                        clean = re.sub(r'[^0-9]', '', token)
+                        if clean.isdigit() and len(clean) <= 2:
+                            val = clean
+                            break
                 row_data.append(val)
             except:
                 row_data.append("?")
-                
-        # Filter out empty rows
-        if all(x == "?" for x in row_data):
-            return []
-            
         return row_data
 
     def draw_full_grid(self, img, bx, by, w, h, off_x, off_y):
         draw = ImageDraw.Draw(img)
         for s in range(5):
             cur_y = by + (s * off_y)
-            # Left
             for i in range(6):
                 draw.rectangle([bx + (i*w), cur_y, bx + (i*w) + w, cur_y + h], outline="red", width=3)
-            # Right
             if off_x > 0:
                 cur_x = bx + off_x
                 for i in range(6):
@@ -105,7 +112,7 @@ class VolleySheetExtractor:
         return img
 
 def main():
-    st.title("🏐 VolleyStats: Auto-Extractor")
+    st.title("🏐 VolleyStats: X-Ray Calibrator")
     
     with st.sidebar:
         uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
@@ -116,10 +123,11 @@ def main():
 
     extractor = VolleySheetExtractor(uploaded_file)
 
-    tab1, tab2 = st.tabs(["👁️ Check Alignment", "📥 Extract Data"])
+    tab1, tab2, tab3 = st.tabs(["📐 Align Grid", "🔍 X-Ray Inspector", "📥 Extract Data"])
 
+    # SHARED SLIDERS
     with tab1:
-        st.write("### Calibration (Pixels)")
+        st.write("### 1. Global Calibration")
         c1, c2 = st.columns(2)
         with c1:
             base_x = st.number_input("Start X", value=264)
@@ -134,17 +142,39 @@ def main():
         debug_img = extractor.draw_full_grid(img, base_x, base_y, w, h, offset_x, offset_y)
         st.image(debug_img, use_container_width=True)
 
+    # NEW INSPECTOR TAB
     with tab2:
-        if st.button("🚀 Extract All Lineups"):
-            data = extractor.extract_full_match(base_x, base_y, w, h, offset_x, offset_y)
-            
-            if data:
-                df = pd.DataFrame(data)
-                df['Starters'] = df['Starters'].apply(lambda x: " | ".join(x))
-                st.dataframe(df, use_container_width=True)
-                st.success("Cleaned Data! Now identifying only the top number (Starter).")
+        st.write("### 2. Check Specific Cells")
+        st.info("Use this to see why Set 2 or 3 is failing. Adjust 'Down Offset' in Tab 1 based on what you see here.")
+        
+        c_set, c_team, c_pos = st.columns(3)
+        inspect_set = c_set.number_input("Inspect Set #", 1, 5, 2)
+        inspect_team = c_team.selectbox("Inspect Team", ["Left", "Right"])
+        inspect_pos = c_pos.selectbox("Inspect Position", ["I", "II", "III", "IV", "V", "VI"])
+        
+        pos_map = {"I": 0, "II": 1, "III": 2, "IV": 3, "V": 4, "VI": 5}
+        
+        cell_img, raw_txt = extractor.get_cell_debug(
+            base_x, base_y, w, h, offset_x, offset_y, 
+            inspect_set, inspect_team, pos_map[inspect_pos]
+        )
+        
+        c_img, c_txt = st.columns(2)
+        with c_img:
+            st.image(cell_img, width=150, caption=f"What computer sees (Set {inspect_set})")
+        with c_txt:
+            st.metric("Raw Text Found", f"'{raw_txt}'")
+            if not raw_txt or raw_txt.strip() == "":
+                st.error("⚠️ Empty! The box is drifting into white space.")
             else:
-                st.error("No data extracted.")
+                st.success("Text detected.")
+
+    with tab3:
+        if st.button("🚀 Extract All"):
+            data = extractor.extract_full_match(base_x, base_y, w, h, offset_x, offset_y)
+            df = pd.DataFrame(data)
+            df['Starters'] = df['Starters'].apply(lambda x: " | ".join(x))
+            st.dataframe(df, use_container_width=True)
 
 if __name__ == "__main__":
     main()
