@@ -95,6 +95,7 @@ def extract_match_info(file):
                     right = re.findall(r'\d+', parts[1])
                     if len(left) >= 2 and len(right) >= 1:
                         try:
+                            # Correct extraction logic for Home/Away scores
                             scores.append({"Home": int(left[-2]), "Away": int(right[0])})
                         except: pass
     return team_home, team_away, scores
@@ -297,10 +298,6 @@ def main():
             starters = subset.iloc[0]['Starters']
             fig = draw_court_view(starters)
             st.plotly_chart(fig, use_container_width=False)
-            
-
-[Image of volleyball rotation diagram]
-
         else:
             st.info("No data.")
 
