@@ -6,63 +6,76 @@ from PIL import Image, ImageDraw
 
 st.set_page_config(page_title="VolleyStats Pro", page_icon="🏐", layout="wide")
 
-# --- OPTIMIZED IMAGE LOADER ---
+# --- OPTIMIZED IMAGE LOADER (100 DPI) ---
 @st.cache_data(show_spinner=False)
 def load_page_image(file_bytes):
-    """
-    Loads the PDF from bytes, extracts Page 1 as a low-res image, 
-    and returns the image + dimensions. 
-    Crucially: It closes the PDF immediately to free RAM.
-    """
     with pdfplumber.open(file_bytes) as pdf:
         page0 = pdf.pages[0]
-        # 72 DPI is standard screen res. Low memory footprint.
-        img = page0.to_image(resolution=72).original
+        # 100 DPI is the sweet spot: Clear text, Low RAM
+        img = page0.to_image(resolution=100).original
         return img, page0.width, page0.height
 
 class VolleySheetExtractor:
     def __init__(self, pdf_file):
-        # We don't keep the PDF open in self. We open it on demand.
         self.pdf_file = pdf_file
-        # Scale factor for 72 DPI is 1.0 (1 pt = 1 px)
-        self.scale_factor = 1.0
 
     def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y, p_height):
         match_data = []
         
-        # Open PDF only for extraction moment
+        # Open PDF only for the split second we need to read text
         with pdfplumber.open(self.pdf_file) as pdf:
             page = pdf.pages[0]
+            # Scale factor: PDF points (72) vs Image pixels (100)
+            scale = 72 / 100
             
             for set_num in range(1, 6): 
                 current_y = base_y + ((set_num - 1) * offset_y)
                 
-                # Team A
-                if current_y + h < p_height:
-                    row_l = self._extract_row_from_page(page, base_x, current_y, w, h)
-                    if row_l: match_data.append({"Set": set_num, "Team": "Left Grid", "Starters": row_l})
+                # --- LEFT TEAM ---
+                # We scale the PIXEL coordinates back to PDF POINTS for extraction
+                row_l = self._extract_row(page, current_y, base_x, w, h, scale, p_height)
+                if row_l: 
+                    match_data.append({"Set": set_num, "Team": "Left Grid", "Starters": row_l})
                 
-                # Team B
-                if current_y + h < p_height:
-                    row_r = self._extract_row_from_page(page, base_x + offset_x, current_y, w, h)
-                    if row_r: match_data.append({"Set": set_num, "Team": "Right Grid", "Starters": row_r})
+                # --- RIGHT TEAM ---
+                row_r = self._extract_row(page, current_y, base_x + offset_x, w, h, scale, p_height)
+                if row_r:
+                    match_data.append({"Set": set_num, "Team": "Right Grid", "Starters": row_r})
                     
         return match_data
 
-    def _extract_row_from_page(self, page, start_x, start_y, w, h):
+    def _extract_row(self, page, top_y, start_x, w, h, scale, p_height):
         row_data = []
+        
+        # Convert Pixel Y to PDF Points Y for safety check
+        if (top_y * scale) + (h * scale) > page.height: return None
+
         for i in range(6):
-            x = start_x + (i * w)
-            # Strict top 40% crop
-            bbox = (x + 1, start_y + 1, x + w - 1, start_y + (h * 0.4))
+            # Calculate Pixel Box
+            px_x = start_x + (i * w)
+            px_y = top_y
+            
+            # Convert to PDF Points for Cropping
+            # BBox = (x0, top, x1, bottom)
+            pdf_x0 = px_x * scale
+            pdf_top = px_y * scale
+            pdf_x1 = (px_x + w) * scale
+            # Strict Top 45% Crop to ignore bottom grid
+            pdf_bottom = pdf_top + ((h * scale) * 0.45)
+            
+            bbox = (pdf_x0 + 1, pdf_top + 1, pdf_x1 - 1, pdf_bottom)
+            
             try:
                 text = page.crop(bbox).extract_text()
                 val = "?"
                 if text:
-                    for token in text.split():
-                        clean = re.sub(r'[^0-9]', '', token)
-                        if clean.isdigit() and len(clean) <= 2:
-                            val = clean
+                    # Clean garbage characters
+                    clean_text = text.replace("|", "").replace("\n", " ")
+                    for token in clean_text.split():
+                        digits = re.sub(r'[^0-9]', '', token)
+                        # Valid numbers are 1-99. 
+                        if digits.isdigit() and len(digits) <= 2:
+                            val = digits
                             break
                 row_data.append(val)
             except:
@@ -71,23 +84,7 @@ class VolleySheetExtractor:
         if all(x == "?" for x in row_data): return None
         return row_data
 
-    def get_cell_debug(self, base_img, base_x, base_y, w, h, offset_x, offset_y, target_set, target_team, target_pos_idx):
-        """Helper for the X-Ray Inspector"""
-        set_y_px = base_y + ((target_set - 1) * offset_y)
-        team_x_px = base_x if target_team == "Left" else base_x + offset_x
-        cell_x_px = team_x_px + (target_pos_idx * w)
-        
-        # Visual Crop from Image
-        img_bbox = (cell_x_px, set_y_px, cell_x_px + w, set_y_px + h)
-        try:
-            cell_img = base_img.crop(img_bbox)
-        except:
-            cell_img = Image.new('RGB', (50, 50), color='gray')
-            
-        return cell_img
-
 def draw_grid_on_image(base_img, bx, by, w, h, off_x, off_y):
-    # Draw on a copy to keep original clean
     img_copy = base_img.copy()
     draw = ImageDraw.Draw(img_copy)
     for s in range(4):
@@ -103,7 +100,7 @@ def draw_grid_on_image(base_img, bx, by, w, h, off_x, off_y):
     return img_copy
 
 def main():
-    st.title("🏐 VolleyStats: Ultra-Lite")
+    st.title("🏐 VolleyStats: Ultra-Lite (100 DPI)")
     
     with st.sidebar:
         uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
@@ -112,7 +109,7 @@ def main():
         st.info("Upload PDF to begin.")
         return
 
-    # Load Image Once (Cached)
+    # Load Image
     try:
         base_img, p_width, p_height = load_page_image(uploaded_file)
     except Exception as e:
@@ -124,35 +121,36 @@ def main():
     tab1, tab2 = st.tabs(["📐 Align Grid", "📥 Extract Data"])
 
     with tab1:
-        st.write("### Calibration (72 DPI)")
+        st.write("### Calibration (100 DPI)")
+        st.info("Resolution increased for better accuracy. Coordinates recalculated.")
+        
         c1, c2 = st.columns(2)
         with c1:
-            base_x = st.number_input("Start X", value=127, step=1)
-            base_y = st.number_input("Start Y", value=90, step=1)
-            w = st.number_input("Cell Width", value=24, step=1)
-            h = st.number_input("Cell Height", value=24, step=1)
+            # I have pre-calculated these for 100 DPI based on your previous success
+            base_x = st.number_input("Start X", value=176, step=1)
+            base_y = st.number_input("Start Y", value=124, step=1)
+            w = st.number_input("Cell Width", value=33, step=1)
+            h = st.number_input("Cell Height", value=33, step=1)
         with c2:
-            offset_x = st.number_input("Right Offset", value=422, step=1) 
-            offset_y = st.number_input("Down Offset", value=158, step=1)
+            offset_x = st.number_input("Right Offset", value=586, step=1) 
+            offset_y = st.number_input("Down Offset", value=220, step=1)
 
-        # Draw grid on the cached image
         debug_img = draw_grid_on_image(base_img, base_x, base_y, w, h, offset_x, offset_y)
-        
-        # --- FIX: Removed width=None, used use_container_width=True ---
         st.image(debug_img, use_container_width=True)
 
     with tab2:
         if st.button("🚀 Extract All"):
             with st.spinner("Extracting..."):
-                # Pass p_height to avoid out-of-bounds errors
+                # Extract
                 data = extractor.extract_full_match(base_x, base_y, w, h, offset_x, offset_y, p_height)
                 
             if data:
                 df = pd.DataFrame(data)
+                # Formatting: Join list into string "1 | 2 | 3..."
                 df['Starters'] = df['Starters'].apply(lambda x: " | ".join(x))
                 st.dataframe(df, use_container_width=True)
             else:
-                st.error("No valid data found.")
+                st.error("No valid data found. Check Alignment.")
 
 if __name__ == "__main__":
     main()
