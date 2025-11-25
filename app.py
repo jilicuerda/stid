@@ -194,12 +194,7 @@ def main():
             
             with col_txt:
                 st.info("💡 **Analysis:** Rotation 1 is a critical weak point (35%).")
-                # This was the line causing the error; simplified here:
                 st.markdown("*(Rotation visualization placeholder)*")
-                
-
-[Image of volleyball rotation diagram]
-
 
         # TAB 3: Demo Efficiency Data
         with tab3:
