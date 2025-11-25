@@ -27,7 +27,7 @@ def generate_mock_player_stats(team_name):
         })
     return pd.DataFrame(data)
 
-# --- BACKEND: FINAL PARSER ---
+# --- BACKEND: PARSER ---
 def parse_pdf_match(file):
     raw_text = ""
     debug_log = []
@@ -38,51 +38,31 @@ def parse_pdf_match(file):
 
     lines = raw_text.split('\n')
     
-    # --- 1. TEAM NAME DETECTION (Multi-Début Fix) ---
+    # --- 1. TEAM NAME DETECTION ---
     potential_names = []
     
     for line in lines:
-        # Check if line contains start times
         if "Début:" in line:
-            # Split by "Début:" to find ALL teams on this line (not just the first)
             parts = line.split("Début:")
-            
-            # The parts contain the text *before* each "Début"
-            # We ignore the last part because it's just the time for the last set
             for part in parts[:-1]:
-                # 1. If "Fin:" exists (from previous set), split and take the right side
                 if "Fin:" in part:
                     candidate = part.split("Fin:")[-1]
                 else:
                     candidate = part
                 
-                # 2. Clean timestamps (e.g. 14:24 R)
+                # Cleanup
                 candidate = re.sub(r'\d{2}:\d{2}\s*R?', '', candidate)
-                
-                # 3. Clean markers (S, SA, SB)
                 clean_name = re.sub(r'\b(SA|SB|S|R)\b', '', candidate)
-                
-                # 4. Remove leading/trailing non-letters
                 clean_name = re.sub(r'^[^A-Z]+|[^A-Z]+$', '', clean_name)
                 
                 if len(clean_name) > 3:
                     potential_names.append(clean_name)
-                    debug_log.append(f"Found Name: {clean_name}")
 
-    # Deduplicate preserving order
     unique_names = list(dict.fromkeys(potential_names))
     
-    # Assign Teams
-    # Logic: Usually the Home team appears first in the file structure
-    team_home = unique_names[1] if len(unique_names) > 1 else "Home Team" 
-    team_away = unique_names[0] if len(unique_names) > 0 else "Away Team"
-    
-    # Swap logic: If names look swapped, we trust the order found
-    # (In your specific file, CONFLANS (Home) might appear 2nd in the Début list if Away served first)
-    # We'll just stick to the unique list. 
-    if len(unique_names) >= 2:
-        team_home = unique_names[1] # Conflans (usually host is listed 2nd in this Début pattern if they receive)
-        team_away = unique_names[0] # Paris
+    # Default Assignment (Can be swapped in UI)
+    name_1 = unique_names[0] if len(unique_names) > 0 else "Team A"
+    name_2 = unique_names[1] if len(unique_names) > 1 else "Team B"
 
     # --- 2. EXTRACT SETS ---
     valid_sets = []
@@ -97,7 +77,6 @@ def parse_pdf_match(file):
             match = duration_pattern.search(line)
             if match:
                 duration_val = int(match.group(1))
-                
                 anchor_span = match.span()
                 left_part = line[:anchor_span[0]].strip()
                 right_part = line[anchor_span[1]:].strip()
@@ -120,13 +99,12 @@ def parse_pdf_match(file):
                             if 1 <= set_num <= 5:
                                 valid_sets.append({
                                     "Set": set_num,
-                                    "Home": score_a,
-                                    "Away": score_b
+                                    "Score_1": score_a, # We map these to Home/Away later
+                                    "Score_2": score_b
                                 })
                         except:
                             pass
         
-        # Stop check AFTER extracting data (Fixes Set 4 issue)
         if "Vainqueur" in line:
             found_results_table = False
 
@@ -135,7 +113,7 @@ def parse_pdf_match(file):
     final_sets = sorted(unique_sets.values(), key=lambda x: x['Set'])
 
     return {
-        "teams": {"Home": team_home, "Away": team_away},
+        "names": [name_1, name_2],
         "sets": final_sets,
         "raw_text": raw_text,
         "logs": debug_log
@@ -146,29 +124,57 @@ def main():
     st.title("🏐 VolleyStats Pro")
 
     with st.sidebar:
-        st.header("Match Data")
+        st.header("Settings")
         uploaded_file = st.file_uploader("Upload Score Sheet", type="pdf")
+        
         st.divider()
-        st.info("💡 **Note:** Scores extracted from PDF. Advanced stats are simulated for demo.")
+        st.subheader("Team Config")
+        # SWAP BUTTON
+        swap_teams = st.checkbox("🔄 Swap Home/Away Teams", value=False)
+        st.info("Check this box if Team A and Team B are reversed.")
 
     if uploaded_file:
         data = parse_pdf_match(uploaded_file)
         
-        # Header
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Home Team", data['teams']['Home'])
-        c2.metric("Away Team", data['teams']['Away'])
+        # Determine Home/Away based on Toggle
+        if swap_teams:
+            home_name = data['names'][1]
+            away_name = data['names'][0]
+            # If swapped, we might need to swap scores too? 
+            # Usually FFVolley result table is fixed (Left=A, Right=B).
+            # If the parser read unique_names[0] as A, but it's actually B...
+            # We usually just swap the NAMES, the scores in the table are fixed Left vs Right.
+        else:
+            home_name = data['names'][0]
+            away_name = data['names'][1]
+
+        # Prepare Set Data
+        # IMPORTANT: The PDF table usually lists Home(Left) vs Away(Right).
+        # We assume Score_1 is Left Column, Score_2 is Right Column.
+        sets_data = []
+        for s in data['sets']:
+            sets_data.append({
+                "Set": s['Set'],
+                "Home": s['Score_1'],
+                "Away": s['Score_2']
+            })
+            
+        sets_df = pd.DataFrame(sets_data)
         
-        s_home = sum(1 for s in data['sets'] if s['Home'] > s['Away'])
-        s_away = sum(1 for s in data['sets'] if s['Away'] > s['Home'])
+        # --- DISPLAY ---
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Home Team", home_name)
+        c2.metric("Away Team", away_name)
+        
+        s_home = sum(1 for s in sets_data if s['Home'] > s['Away'])
+        s_away = sum(1 for s in sets_data if s['Away'] > s['Home'])
         
         winner_color = "green" if s_home > s_away else "red"
         c3.markdown(f"## Result: :{winner_color}[{s_home} - {s_away}]")
 
-        if data['sets']:
-            sets_df = pd.DataFrame(data['sets'])
+        if sets_data:
             sets_df['Diff'] = sets_df['Home'] - sets_df['Away']
-            mock_stats = generate_mock_player_stats(data['teams']['Away'])
+            mock_stats = generate_mock_player_stats(away_name)
 
             tab1, tab2, tab3, tab4 = st.tabs([
                 "📈 Score & Momentum", 
@@ -222,7 +228,7 @@ def main():
         # DEBUGGER
         st.divider()
         with st.expander("🛠️ Debug Inspector"):
-            st.write("Found Names:", data['teams'])
+            st.write("Raw Names Found:", data['names'])
             st.text("\n".join(data['logs']))
 
 if __name__ == "__main__":
