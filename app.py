@@ -12,70 +12,95 @@ def parse_pdf_match(file):
     with pdfplumber.open(file) as pdf:
         for page in pdf.pages:
             text += page.extract_text() + "\n"
-
-    # 1. Team Name Extraction (Improved)
+    
     lines = text.split('\n')
+
+    # --- 1. TEAM NAME DETECTION (The "Début" Trick) ---
+    # Strategy: Find lines with "Début:" (Start time) and grab the text before it.
+    # Example: "SA PARIS VOLLEY Début: 14:00" -> Captures "PARIS VOLLEY"
+    
+    potential_names = []
+    
+    for line in lines:
+        if "Début:" in line:
+            # Split line at "Début:"
+            parts = line.split("Début:")
+            before_debut = parts[0].strip()
+            
+            # Clean up the name (Remove "SA", "SB", "S", "R")
+            # Regex removes "S", "SA", "SB", "R" from the END or START of the name part
+            # Often appears as "SA PARIS" or "PARIS S"
+            clean_name = re.sub(r'\b(SA|SB|S|R)\b', '', before_debut).strip()
+            
+            # Additional Cleanup: Remove trailing/leading non-letters
+            clean_name = re.sub(r'^[^A-Z]+|[^A-Z]+$', '', clean_name)
+            
+            if len(clean_name) > 3:
+                potential_names.append(clean_name)
+
+    # Filter duplicates while preserving order
+    unique_names = list(dict.fromkeys(potential_names))
+    
+    # Assign Home/Away
+    # Heuristic: Usually Home is listed first in the file header, but 'Début' lines mix them.
+    # We will try to find specific "Equipe A" headers to confirm.
     team_a = "Home Team"
     team_b = "Away Team"
-    
-    # Heuristics for FFvolley
-    for i, line in enumerate(lines[:40]):
-        # explicit labels
-        if "Equipe A" in line or "Team A" in line:
-            clean = line.replace("Equipe A", "").replace("Team A", "").replace(":", "").strip()
-            if len(clean) > 3: team_a = clean
-            elif i+1 < len(lines): team_a = lines[i+1].strip()
-        
-        if "Equipe B" in line or "Team B" in line:
-            clean = line.replace("Equipe B", "").replace("Team B", "").replace(":", "").strip()
-            if len(clean) > 3: team_b = clean
-            elif i+1 < len(lines): team_b = lines[i+1].strip()
-            
-        # positional heuristics (A PARIS...)
-        if re.match(r"^\s*A\s+[A-Z\s\-]{4,}", line):
-             cand = line.replace("A ", "").strip()
-             if "NATIONALE" not in cand: team_a = cand
-        if re.match(r"^\s*B\s+[A-Z\s\-]{4,}", line):
-             cand = line.replace("B ", "").strip()
-             if "NATIONALE" not in cand: team_b = cand
 
-    # 2. Extract Sets (Fixed Footer Logic)
+    if len(unique_names) >= 2:
+        # Default assumption
+        team_a = unique_names[0]
+        team_b = unique_names[1]
+        
+        # Try to correct A/B assignment by looking for explicit "(A)" or "(B)" labels in roster
+        # This scans the whole text for "(A) TeamName" patterns
+        for name in unique_names:
+            # Pattern: "(A) PARIS" or "Equipe A : PARIS"
+            if re.search(r"\(A\)\s*" + re.escape(name), text) or re.search(r"Equipe A.*" + re.escape(name), text):
+                team_a = name
+            if re.search(r"\(B\)\s*" + re.escape(name), text) or re.search(r"Equipe B.*" + re.escape(name), text):
+                team_b = name
+
+    # Fallback: If names are still generic, try to grab from top of file
+    if team_a == "Home Team" and len(lines) > 5:
+        # Look for the line describing the match "Category - TeamA TeamB"
+        # We skip the first few lines which are usually titles
+        for line in lines[:10]:
+            if "SENIORS" in line or "MASCULIN" in line:
+                 # It's usually a mess like "SENIORS CONFLANS PARIS"
+                 # We can't parse this reliably without the "Début" names
+                 pass
+
+    # --- 2. EXTRACT SETS (Existing Working Logic) ---
     valid_sets = []
-    
-    # Regex for duration (e.g. 29', 29 ' 29’ etc)
     duration_pattern = re.compile(r"(\d{1,3})\s*['’′`]")
-    
     found_results_table = False
     
     for line in lines:
-        # Start looking when we see RESULTATS
         if "RESULTATS" in line:
             found_results_table = True
+        if "Vainqueur" in line: # Stop at footer
+            found_results_table = False
             
         if found_results_table:
             match = duration_pattern.search(line)
             if match:
-                # 1. Extract Data FIRST (Before checking for footer stop)
                 anchor_span = match.span()
                 left_part = line[:anchor_span[0]].strip()
                 right_part = line[anchor_span[1]:].strip()
                 duration_val = int(match.group(1))
 
-                # Ignore Total Duration (usually > 60)
-                if duration_val < 60:
+                if duration_val < 60: # Ignore Total Duration
                     left_nums = re.findall(r'\d+', left_part)
                     right_nums = re.findall(r'\d+', right_part)
                     
-                    # Logic: 
-                    # Left side ends with: ... [Score] [SetNum]
-                    # Right side starts with: [Score] ...
                     if len(left_nums) >= 2 and len(right_nums) >= 1:
                         try:
                             score_a = int(left_nums[-2]) 
                             set_num = int(left_nums[-1])
                             score_b = int(right_nums[0])
                             
-                            # Sanity check for merged numbers (e.g. "254" -> Set 4, Score 25)
+                            # Fix merged SetNum (e.g. "254" -> 25, 4)
                             if set_num > 5: 
                                 s_str = str(set_num)
                                 set_num = int(s_str[-1])
@@ -90,18 +115,15 @@ def parse_pdf_match(file):
                         except:
                             pass
 
-        # Stop looking ONLY if "Vainqueur" is found (Signatures often share line with Set 4)
-        if "Vainqueur" in line:
-            found_results_table = False
-
-    # Sort and Deduplicate
+    # Final Sort
     valid_sets.sort(key=lambda x: x['Set'])
     unique_sets = {s['Set']: s for s in valid_sets}
     final_sets = sorted(unique_sets.values(), key=lambda x: x['Set'])
 
     return {
         "teams": {"Home": team_a, "Away": team_b},
-        "sets": final_sets
+        "sets": final_sets,
+        "debug_names": unique_names # For debugging
     }
 
 # --- FRONTEND ---
@@ -124,23 +146,23 @@ def main():
         winner_color = "green" if s_home > s_away else "red"
         c3.markdown(f"### Result: :{winner_color}[{s_home} - {s_away}]")
 
-        st.divider()
-
         # 2. Visualization
         if data['sets']:
+            st.divider()
             sets_df = pd.DataFrame(data['sets'])
             sets_df['Diff'] = sets_df['Home'] - sets_df['Away']
-            sets_df['Winner'] = sets_df['Diff'].apply(lambda x: "Home" if x > 0 else "Away")
             
-            # Score Table
             st.subheader("Set Scores")
             st.dataframe(sets_df.set_index('Set'), use_container_width=True)
             
-            # Momentum Chart
-            st.subheader("Momentum (Point Differential)")
-            st.bar_chart(sets_df, x='Set', y='Diff', color='Winner')
+            st.subheader("Momentum")
+            st.bar_chart(sets_df, x='Set', y='Diff')
         else:
-            st.error("⚠️ No sets found. Please ensure the PDF has a filled 'RESULTATS' table.")
+            st.error("⚠️ No sets found.")
+            
+        # Debug Info (Optional)
+        with st.expander("Debug: Detected Teams"):
+            st.write(f"Names found via 'Début' scan: {data['debug_names']}")
 
 if __name__ == "__main__":
     main()
