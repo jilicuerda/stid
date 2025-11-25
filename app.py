@@ -10,30 +10,22 @@ class VolleySheetExtractor:
     def __init__(self, pdf_file):
         self.pdf = pdfplumber.open(pdf_file)
         self.page0 = self.pdf.pages[0]
-        
-        # Calculate the Scale Factor (Pixels vs PDF Points)
-        # Standard PDF is 72 points per inch. We render image at 150 DPI.
         self.img_scale = 150 
-        self.scale_factor = 72 / 150  # Roughly 0.48
+        self.scale_factor = 72 / 150
 
     def get_page_image(self):
         return self.page0.to_image(resolution=self.img_scale).original
 
     def _scale_coords(self, val):
-        """Converts Slider Pixels to PDF Points"""
         return val * self.scale_factor
 
     def extract_full_match(self, base_x, base_y, w, h, offset_x, offset_y):
         match_data = []
         
-        # Loop through Sets 1 to 5
         for set_num in range(1, 6): 
-            # Calculate Y for this set (in Pixels)
             current_y_pixels = base_y + ((set_num - 1) * offset_y)
             
             # --- TEAM A (LEFT) ---
-            # Convert pixels to PDF points before cropping
-            # We add a small 'buffer' to shrink the box slightly and avoid borders
             team_a_starters = self._extract_row(base_x, current_y_pixels, w, h)
             if team_a_starters:
                 match_data.append({
@@ -51,45 +43,48 @@ class VolleySheetExtractor:
         return match_data
 
     def _extract_row(self, start_x_px, start_y_px, w_px, h_px):
-        """Helper to extract 6 grid cells using SCALED coordinates."""
+        """Helper to extract 6 grid cells with SMART CLEANING."""
         row_data = []
         
-        # Convert the row start position to PDF points
         pdf_y = self._scale_coords(start_y_px)
         pdf_h = self._scale_coords(h_px)
         
-        # Safety Check: Is this Y off the page?
         if pdf_y + pdf_h > self.page0.height:
             return []
 
         for i in range(6):
-            # Calculate X in Pixels
             x_px = start_x_px + (i * w_px)
-            
-            # Convert to PDF Points
             pdf_x = self._scale_coords(x_px)
             pdf_w = self._scale_coords(w_px)
             
-            # Crop Box (x0, y0, x1, y1)
-            # We shrink the box by 2 points to avoid grabbing black grid lines
+            # Crop Box: Shrink slightly (2pts) to avoid borders
             bbox = (pdf_x + 2, pdf_y + 2, pdf_x + pdf_w - 2, pdf_y + pdf_h - 2)
             
             try:
                 crop = self.page0.crop(bbox)
                 text = crop.extract_text()
                 
-                # CLEANUP: Remove non-digits (like "I", "II", ":", "Left")
-                # We only want the Player Number
-                clean_val = re.sub(r'[^0-9]', '', text) if text else "?"
+                # --- NEW CLEANING LOGIC ---
+                val = "?"
+                if text:
+                    # 1. Split by whitespace or newlines
+                    tokens = text.split()
+                    
+                    # 2. Find the first token that is a valid Jersey Number (1-99)
+                    for token in tokens:
+                        # Remove non-digits
+                        clean_token = re.sub(r'[^0-9]', '', token)
+                        
+                        # Verify it looks like a player number (1 or 2 digits)
+                        if clean_token.isdigit() and len(clean_token) <= 2:
+                            val = clean_token
+                            break # Found the top number (Starter), stop looking!
                 
-                # If empty after cleaning, mark as ?
-                if not clean_val: clean_val = "?"
-                
-                row_data.append(clean_val)
+                row_data.append(val)
             except:
                 row_data.append("?")
                 
-        # Filter out empty rows (if all are ?)
+        # Filter out empty rows
         if all(x == "?" for x in row_data):
             return []
             
@@ -97,7 +92,6 @@ class VolleySheetExtractor:
 
     def draw_full_grid(self, img, bx, by, w, h, off_x, off_y):
         draw = ImageDraw.Draw(img)
-        # Draw 5 Sets
         for s in range(5):
             cur_y = by + (s * off_y)
             # Left
@@ -128,8 +122,6 @@ def main():
         st.write("### Calibration (Pixels)")
         c1, c2 = st.columns(2)
         with c1:
-            # I updated these defaults to match the "Image Scale"
-            # If you previously used 264, try sticking with it, the code now scales it correctly.
             base_x = st.number_input("Start X", value=264)
             base_y = st.number_input("Start Y", value=186)
             w = st.number_input("Cell Width", value=50)
@@ -150,8 +142,9 @@ def main():
                 df = pd.DataFrame(data)
                 df['Starters'] = df['Starters'].apply(lambda x: " | ".join(x))
                 st.dataframe(df, use_container_width=True)
+                st.success("Cleaned Data! Now identifying only the top number (Starter).")
             else:
-                st.error("No data extracted. Check your X/Y coordinates in Tab 1.")
+                st.error("No data extracted.")
 
 if __name__ == "__main__":
     main()
