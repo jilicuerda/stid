@@ -2,3 +2,6 @@ streamlit
 pdfplumber
 pandas
 plotly
+
+flask
+flask-cors
