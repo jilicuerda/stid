@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -27,10 +28,9 @@
         .net-pattern { background-image: radial-gradient(circle, #333 1px, transparent 1px); background-size: 4px 4px; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         
-        /* Utility to hide elements */
         .hidden { display: none !important; }
         
-        /* Player Circle Styles */
+        /* Styles des joueurs */
         .player-circle {
             width: 3rem; height: 3rem;
             border-radius: 9999px;
@@ -43,6 +43,119 @@
     </style>
 </head>
 <body class="bg-bg-light dark:bg-bg-dark font-display text-[#111318] dark:text-white min-h-screen flex flex-col">
+
+    <script>
+        // C'est ici que vit toute la logique du Volley.
+        // Plus besoin de fichier externe !
+        class VolleyMatch {
+            constructor() {
+                this.resetState();
+            }
+
+            resetState() {
+                this.state = {
+                    home: { name: "Home", score: 0, sets: 0, players: [], onCourt: [] },
+                    away: { name: "Away", score: 0, sets: 0, players: [], onCourt: [] },
+                    server: null, 
+                    set: 1,
+                    history: [],
+                    tempPoint: { winner: null, actorTeam: null, actorNum: null },
+                    subTarget: { team: null, idx: null }
+                };
+            }
+
+            initializeMatch(homeName, awayName, firstServer, homeRoster, homeCourt, awayRoster, awayCourt) {
+                this.state.home.name = homeName;
+                this.state.home.players = homeRoster;
+                this.state.home.onCourt = homeCourt;
+
+                this.state.away.name = awayName;
+                this.state.away.players = awayRoster;
+                this.state.away.onCourt = awayCourt;
+
+                this.state.server = firstServer;
+                this.state.set = 1;
+                this.state.home.score = 0;
+                this.state.away.score = 0;
+                this.state.history = [];
+            }
+
+            scorePoint(winner, details) {
+                const currentServerTeam = this.state.server;
+                const currentServerNum = this.state[currentServerTeam].onCourt[0].num; 
+                
+                const rotHome = this.state.home.onCourt.map(p => p.num).join('-');
+                const rotAway = this.state.away.onCourt.map(p => p.num).join('-');
+
+                this.state[winner].score++;
+
+                const logEntry = {
+                    set: this.state.set,
+                    score_dom: this.state.home.score,
+                    score_ext: this.state.away.score,
+                    winner_team: this.state[winner].name,
+                    point_type: (details.actorTeam === winner) ? 'Won' : 'Opp Error',
+                    action: details.action || 'Unknown',
+                    actor_num: details.actorNum || '?',
+                    actor_team: details.actorTeam ? this.state[details.actorTeam].name : '?',
+                    server_team: this.state[currentServerTeam].name,
+                    server_num: currentServerNum,
+                    rot_home: rotHome,
+                    rot_away: rotAway,
+                    timestamp: new Date().toISOString()
+                };
+                this.state.history.push(logEntry);
+
+                if (this.state.server !== winner) {
+                    this.rotate(winner);
+                    this.state.server = winner;
+                }
+            }
+
+            rotate(team) {
+                const squad = this.state[team].onCourt;
+                const server = squad.shift(); 
+                squad.push(server); 
+            }
+
+            substitute(team, courtIndex, newPlayerNum) {
+                const newPlayer = this.state[team].players.find(p => p.num == newPlayerNum);
+                if (newPlayer) {
+                    this.state[team].onCourt[courtIndex] = newPlayer;
+                }
+            }
+
+            endSet() {
+                if (this.state.home.score > this.state.away.score) {
+                    this.state.home.sets++;
+                } else {
+                    this.state.away.sets++;
+                }
+                this.state.set++;
+                this.state.home.score = 0;
+                this.state.away.score = 0;
+                return true; 
+            }
+
+            generateBackupJSON() {
+                return "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state));
+            }
+
+            loadFromJSON(jsonString) {
+                try {
+                    const data = JSON.parse(jsonString);
+                    if (data.home && data.away && data.history) {
+                        this.state = data;
+                        return true;
+                    }
+                    return false;
+                } catch (e) {
+                    console.error("Invalid JSON", e);
+                    return false;
+                }
+            }
+        }
+    </script>
 
     <div id="setupModal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl border border-gray-700">
@@ -197,7 +310,6 @@
             
             <div class="flex-1 border-b-[3px] border-white/80 relative" id="cAway">
                 <div class="absolute bottom-0 w-full h-1 bg-transparent z-0"></div>
-                
                 <div onclick="openSub('away', 0)" class="absolute top-[20%] left-[80%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
                     <div id="a_p1" class="player-circle bg-white text-gray-800 border-gray-200">?</div>
                 </div>
@@ -273,8 +385,6 @@
         </div>
     </div>
 
-    <script src="game-logic.js"></script>
-
     <script>
         // Initialisation globale
         let game = new VolleyMatch();
@@ -331,7 +441,6 @@
                         if(i < 6) starters.push(p);
                     }
                 }
-                // Fill if empty
                 while(starters.length < 6) starters.push({num:'?', name:'?', role:'?'});
                 return { all: roster, court: starters };
             };
@@ -367,7 +476,6 @@
                     const el = document.getElementById(`${prefix}${i+1}`);
                     if(el) {
                         el.innerHTML = `<span class="text-lg">${p.num}</span><span class="text-[8px] uppercase">${p.role || ''}</span>`;
-                        // Server highlight
                         if(s.server === team && i === 0) el.classList.add('server-indicator');
                         else el.classList.remove('server-indicator');
                     }
@@ -391,7 +499,6 @@
             game.state.tempPoint = { winner, actorTeam: null, actorNum: null };
             document.getElementById('scoreTitle').innerText = `Point for ${game.state[winner].name}`;
             
-            // Hide Actions, Show Grid
             document.getElementById('actionsWinner').classList.add('hidden');
             document.getElementById('actionsLoser').classList.add('hidden');
 
@@ -409,7 +516,6 @@
                 btn.className = "h-10 w-10 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition";
                 btn.innerText = p.num;
                 btn.onclick = () => {
-                    // Highlight logic
                     Array.from(div.children).forEach(c => c.classList.remove('bg-primary', 'text-white'));
                     btn.classList.add('bg-primary', 'text-white');
                     
@@ -493,11 +599,17 @@
 
         async function sendToDB() {
             if(!confirm("Sync to Cloud DB?")) return;
-            const payload = game.state; // Or format as needed by API
-            // ... (Your fetch logic here)
-            alert("This connects to your app.py backend!");
+            const payload = game.state;
+            try {
+                const res = await fetch('/api/save_match', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const json = await res.json();
+                alert(json.message);
+            } catch(e) { alert("Error connecting to Cloud: " + e); }
         }
-
     </script>
 </body>
 </html>
