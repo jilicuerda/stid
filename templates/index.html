@@ -4,7 +4,11 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>VolleyLive Pro - Match Console</title>
+    
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     
@@ -27,7 +31,6 @@
         }
         .net-pattern { background-image: radial-gradient(circle, #333 1px, transparent 1px); background-size: 4px 4px; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        
         .hidden { display: none !important; }
         
         /* Styles des joueurs */
@@ -45,354 +48,305 @@
 <body class="bg-bg-light dark:bg-bg-dark font-display text-[#111318] dark:text-white min-h-screen flex flex-col">
 
     <script>
-        // C'est ici que vit toute la logique du Volley.
-        // Plus besoin de fichier externe !
         class VolleyMatch {
-            constructor() {
-                this.resetState();
-            }
-
+            constructor() { this.resetState(); }
             resetState() {
                 this.state = {
                     home: { name: "Home", score: 0, sets: 0, players: [], onCourt: [] },
                     away: { name: "Away", score: 0, sets: 0, players: [], onCourt: [] },
-                    server: null, 
-                    set: 1,
-                    history: [],
+                    server: null, set: 1, history: [],
                     tempPoint: { winner: null, actorTeam: null, actorNum: null },
                     subTarget: { team: null, idx: null }
                 };
             }
-
-            initializeMatch(homeName, awayName, firstServer, homeRoster, homeCourt, awayRoster, awayCourt) {
-                this.state.home.name = homeName;
-                this.state.home.players = homeRoster;
-                this.state.home.onCourt = homeCourt;
-
-                this.state.away.name = awayName;
-                this.state.away.players = awayRoster;
-                this.state.away.onCourt = awayCourt;
-
-                this.state.server = firstServer;
-                this.state.set = 1;
-                this.state.home.score = 0;
-                this.state.away.score = 0;
-                this.state.history = [];
+            initializeMatch(hName, aName, serv, hRoster, hCourt, aRoster, aCourt) {
+                this.state.home.name = hName; this.state.home.players = hRoster; this.state.home.onCourt = hCourt;
+                this.state.away.name = aName; this.state.away.players = aRoster; this.state.away.onCourt = aCourt;
+                this.state.server = serv; this.state.set = 1; this.state.history = [];
             }
-
             scorePoint(winner, details) {
-                const currentServerTeam = this.state.server;
-                const currentServerNum = this.state[currentServerTeam].onCourt[0].num; 
-                
-                const rotHome = this.state.home.onCourt.map(p => p.num).join('-');
-                const rotAway = this.state.away.onCourt.map(p => p.num).join('-');
-
+                const sTeam = this.state.server;
+                const sNum = this.state[sTeam].onCourt[0].num;
                 this.state[winner].score++;
-
-                const logEntry = {
-                    set: this.state.set,
-                    score_dom: this.state.home.score,
-                    score_ext: this.state.away.score,
-                    winner_team: this.state[winner].name,
-                    point_type: (details.actorTeam === winner) ? 'Won' : 'Opp Error',
-                    action: details.action || 'Unknown',
-                    actor_num: details.actorNum || '?',
-                    actor_team: details.actorTeam ? this.state[details.actorTeam].name : '?',
-                    server_team: this.state[currentServerTeam].name,
-                    server_num: currentServerNum,
-                    rot_home: rotHome,
-                    rot_away: rotAway,
-                    timestamp: new Date().toISOString()
-                };
-                this.state.history.push(logEntry);
-
-                if (this.state.server !== winner) {
-                    this.rotate(winner);
-                    this.state.server = winner;
-                }
+                this.state.history.push({
+                    set: this.state.set, score_dom: this.state.home.score, score_ext: this.state.away.score,
+                    winner_team: this.state[winner].name, action: details.action, actor_num: details.actorNum,
+                    server_team: this.state[sTeam].name, server_num: sNum,
+                    rot_home: this.state.home.onCourt.map(p=>p.num).join('-'),
+                    rot_away: this.state.away.onCourt.map(p=>p.num).join('-')
+                });
+                if(this.state.server !== winner) { this.rotate(winner); this.state.server = winner; }
             }
-
-            rotate(team) {
-                const squad = this.state[team].onCourt;
-                const server = squad.shift(); 
-                squad.push(server); 
+            rotate(team) { const s = this.state[team].onCourt; s.push(s.shift()); }
+            substitute(team, idx, num) {
+                const p = this.state[team].players.find(x => x.num == num);
+                if(p) this.state[team].onCourt[idx] = p;
             }
-
-            substitute(team, courtIndex, newPlayerNum) {
-                const newPlayer = this.state[team].players.find(p => p.num == newPlayerNum);
-                if (newPlayer) {
-                    this.state[team].onCourt[courtIndex] = newPlayer;
-                }
-            }
-
             endSet() {
-                if (this.state.home.score > this.state.away.score) {
-                    this.state.home.sets++;
-                } else {
-                    this.state.away.sets++;
-                }
-                this.state.set++;
-                this.state.home.score = 0;
-                this.state.away.score = 0;
-                return true; 
+                (this.state.home.score > this.state.away.score) ? this.state.home.sets++ : this.state.away.sets++;
+                this.state.set++; this.state.home.score = 0; this.state.away.score = 0;
+                return true;
             }
-
-            generateBackupJSON() {
-                return "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state));
-            }
-
-            loadFromJSON(jsonString) {
-                try {
-                    const data = JSON.parse(jsonString);
-                    if (data.home && data.away && data.history) {
-                        this.state = data;
-                        return true;
-                    }
-                    return false;
-                } catch (e) {
-                    console.error("Invalid JSON", e);
-                    return false;
-                }
+            generateBackupJSON() { return "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state)); }
+            loadFromJSON(json) {
+                try { this.state = JSON.parse(json); return true; } catch(e) { return false; }
             }
         }
     </script>
 
     <div id="setupModal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-2xl w-full mx-4 shadow-2xl border border-gray-700">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-3xl w-full mx-4 shadow-2xl border border-gray-700">
+            
             <div id="stepLoad" class="text-center">
                 <h2 class="text-3xl font-bold mb-6 text-primary">VolleyLive Pro</h2>
                 <div class="grid grid-cols-1 gap-4">
                     <button onclick="showStep('step1')" class="py-4 bg-primary text-white rounded-xl font-bold hover:bg-blue-600 transition">
-                        ⭐ New Match
+                        ⭐ Nouveau Match
                     </button>
-                    <div onclick="document.getElementById('fileInput').click()" class="py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                        <p class="font-bold">📂 Load JSON Backup</p>
-                        <input type="file" id="fileInput" accept=".json" class="hidden" onchange="loadGameFromFile(this)">
+                    <div onclick="document.getElementById('backupInput').click()" class="py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                        <p class="font-bold">📂 Charger une Sauvegarde JSON</p>
+                        <input type="file" id="backupInput" accept=".json" class="hidden" onchange="loadGameFromFile(this)">
                     </div>
                 </div>
             </div>
 
             <div id="step1" class="hidden">
-                <h3 class="text-xl font-bold mb-4">Match Configuration</h3>
+                <h3 class="text-xl font-bold mb-4">Configuration</h3>
                 <div class="space-y-4">
+                    <div><label class="text-xs font-bold text-gray-500">NOM ÉQUIPE DOMICILE (NOUS)</label><input type="text" id="homeName" value="Nous" class="w-full rounded-lg border-gray-300 p-2"></div>
+                    <div><label class="text-xs font-bold text-gray-500">NOM ÉQUIPE EXTÉRIEUR (EUX)</label><input type="text" id="awayName" value="Adversaire" class="w-full rounded-lg border-gray-300 p-2"></div>
                     <div>
-                        <label class="text-xs font-bold uppercase text-gray-500">Home Team</label>
-                        <input type="text" id="homeName" value="Home Team" class="w-full rounded-lg border-gray-300 dark:bg-gray-700 p-2">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold uppercase text-gray-500">Away Team</label>
-                        <input type="text" id="awayName" value="Visitor" class="w-full rounded-lg border-gray-300 dark:bg-gray-700 p-2">
-                    </div>
-                    <div>
-                        <label class="text-xs font-bold uppercase text-gray-500">First Serve</label>
-                        <select id="firstServer" class="w-full rounded-lg border-gray-300 dark:bg-gray-700 p-2">
-                            <option value="home">Home Starts</option>
-                            <option value="away">Away Starts</option>
+                        <label class="text-xs font-bold text-gray-500">PREMIER SERVICE</label>
+                        <select id="firstServer" class="w-full rounded-lg border-gray-300 p-2">
+                            <option value="home">Nous servons</option>
+                            <option value="away">Eux servent</option>
                         </select>
                     </div>
                 </div>
                 <div class="flex gap-3 mt-6">
-                    <button onclick="showStep('stepLoad')" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-bold">Back</button>
-                    <button onclick="initRostersUI(); showStep('step2')" class="flex-1 py-2 bg-primary text-white rounded-lg font-bold">Next</button>
+                    <button onclick="showStep('stepLoad')" class="px-4 py-2 bg-gray-200 rounded-lg font-bold">Retour</button>
+                    <button onclick="initRostersUI(); showStep('step2')" class="flex-1 py-2 bg-primary text-white rounded-lg font-bold">Suivant</button>
                 </div>
             </div>
 
             <div id="step2" class="hidden">
-                <h3 class="text-xl font-bold mb-4">Lineups</h3>
-                <div class="grid grid-cols-2 gap-4 h-64 overflow-y-auto mb-4 border rounded-lg p-2">
+                <h3 class="text-xl font-bold mb-4">Effectifs</h3>
+                
+                <div class="grid grid-cols-2 gap-6 h-80 overflow-y-auto mb-4 border rounded-lg p-4">
                     <div>
-                        <h4 class="font-bold text-primary mb-2">Home</h4>
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-primary">Nous (Détails)</h4>
+                            <button onclick="document.getElementById('excelInput').click()" class="text-xs bg-green-600 text-white px-2 py-1 rounded flex items-center gap-1 hover:bg-green-700">
+                                <span class="material-symbols-outlined text-sm">table_view</span> Import Excel
+                            </button>
+                            <input type="file" id="excelInput" accept=".xlsx, .xls" class="hidden" onchange="importHomeTeamFromExcel(this)">
+                        </div>
                         <div id="homeRosterList" class="space-y-2"></div>
-                        <button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2">+ Add Player</button>
+                        <button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Ajouter Joueur</button>
                     </div>
+
                     <div>
-                        <h4 class="font-bold text-gray-500 mb-2">Away (Num Only)</h4>
+                        <h4 class="font-bold text-gray-500 mb-2">Eux (Numéros)</h4>
                         <div id="awayRosterList" class="space-y-2"></div>
-                        <button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2">+ Add Player</button>
+                        <button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Ajouter Joueur</button>
                     </div>
                 </div>
-                <button onclick="startGame()" class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg">
-                    🚀 START MATCH
-                </button>
+
+                <div class="flex gap-3">
+                    <button onclick="showStep('step1')" class="px-4 py-3 bg-gray-200 rounded-xl font-bold">Retour</button>
+                    <button onclick="startGame()" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg">🚀 LANCER LE MATCH</button>
+                </div>
             </div>
         </div>
     </div>
 
     <div id="scoreModal" class="hidden fixed inset-0 bg-black/90 z-[100] flex items-center justify-center">
-        <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 max-w-lg w-full mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+        <div class="bg-white rounded-2xl p-4 max-w-lg w-full mx-4 flex flex-col max-h-[90vh]">
             <h3 id="scoreTitle" class="text-center font-bold text-2xl mb-4 border-b pb-2">Point...</h3>
-            
             <div class="overflow-y-auto flex-1">
                 <div id="secWinner" class="mb-4">
-                    <h4 class="text-green-600 font-bold uppercase text-xs tracking-widest mb-2">1. Who scored / Made the kill?</h4>
+                    <h4 class="text-green-600 font-bold text-xs uppercase mb-2">1. Point Gagnant (Action Positive)</h4>
                     <div id="gridWinners" class="grid grid-cols-6 gap-2 mb-2"></div>
                     <div id="actionsWinner" class="hidden grid grid-cols-2 gap-2">
-                        <button onclick="finalizeScore('Attaque')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Attack Kill</button>
+                        <button onclick="finalizeScore('Attaque')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Attaque</button>
                         <button onclick="finalizeScore('Block')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Block</button>
                         <button onclick="finalizeScore('Ace')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Ace</button>
-                        <button onclick="finalizeScore('Feinte')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Tip/Dump</button>
+                        <button onclick="finalizeScore('Feinte')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Feinte</button>
                     </div>
                 </div>
-
                 <div id="secLoser" class="mb-4">
-                    <h4 class="text-red-500 font-bold uppercase text-xs tracking-widest mb-2">2. Or Opponent Error?</h4>
+                    <h4 class="text-red-500 font-bold text-xs uppercase mb-2">2. Faute Adverse</h4>
                     <div id="gridLosers" class="grid grid-cols-6 gap-2 mb-2"></div>
                     <div id="actionsLoser" class="hidden grid grid-cols-2 gap-2">
-                        <button onclick="finalizeScore('Attaque Out')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Attack Out</button>
-                        <button onclick="finalizeScore('Faute Filet')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Net Violation</button>
-                        <button onclick="finalizeScore('Faute Service')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Service Error</button>
-                        <button onclick="finalizeScore('Faute Main')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Ball Handling</button>
+                        <button onclick="finalizeScore('Attaque Out')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Attaque Out</button>
+                        <button onclick="finalizeScore('Faute Filet')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Filet</button>
+                        <button onclick="finalizeScore('Faute Service')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Service Raté</button>
+                        <button onclick="finalizeScore('Faute Main')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Faute Main</button>
                     </div>
                 </div>
             </div>
-
-            <button onclick="document.getElementById('scoreModal').classList.add('hidden')" class="py-3 bg-gray-200 text-gray-700 font-bold rounded-xl mt-2">Cancel</button>
+            <button onclick="document.getElementById('scoreModal').classList.add('hidden')" class="py-3 bg-gray-200 font-bold rounded-xl mt-2">Annuler</button>
         </div>
     </div>
 
     <div id="subModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center">
         <div class="bg-white p-6 rounded-xl w-80 text-center">
-            <h3 class="font-bold text-xl mb-2">Substitution</h3>
-            <p class="text-sm text-gray-500 mb-4">Player Out: <strong id="subOutName"></strong></p>
+            <h3 class="font-bold text-xl mb-2">Changement</h3>
+            <p class="text-sm text-gray-500 mb-4">Sortie : <strong id="subOutName"></strong></p>
             <select id="subInSelect" class="w-full border p-2 rounded mb-4"></select>
             <div class="flex gap-2">
-                <button onclick="confirmSub()" class="flex-1 bg-primary text-white py-2 rounded font-bold">Confirm</button>
-                <button onclick="document.getElementById('subModal').classList.add('hidden')" class="flex-1 bg-gray-200 py-2 rounded font-bold">Cancel</button>
+                <button onclick="confirmSub()" class="flex-1 bg-primary text-white py-2 rounded font-bold">Confirmer</button>
+                <button onclick="document.getElementById('subModal').classList.add('hidden')" class="flex-1 bg-gray-200 py-2 rounded font-bold">Annuler</button>
             </div>
         </div>
     </div>
 
-    <header class="bg-white dark:bg-bg-dark/50 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md">
+    <header class="bg-white dark:bg-bg-dark/50 border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md">
         <div class="flex items-center gap-3">
-            <div class="p-2 bg-primary/10 rounded-lg text-primary">
-                <span class="material-symbols-outlined block">sports_volleyball</span>
-            </div>
+            <div class="p-2 bg-primary/10 rounded-lg text-primary"><span class="material-symbols-outlined block">sports_volleyball</span></div>
             <div>
-                <h1 id="matchVersus" class="text-lg font-bold leading-tight">Home vs Away</h1>
+                <h1 id="matchVersus" class="text-lg font-bold leading-tight">Match</h1>
                 <div class="flex items-center gap-2">
                     <span class="text-xs font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded uppercase">Set <span id="setNum">1</span></span>
-                    <span class="text-xs font-medium text-gray-500 uppercase tracking-wider">Sets: <span id="gSetHome">0</span> - <span id="gSetAway">0</span></span>
+                    <span class="text-xs font-medium text-gray-500 uppercase">Sets: <span id="gSetHome">0</span> - <span id="gSetAway">0</span></span>
                 </div>
             </div>
         </div>
         <div class="flex items-center gap-2">
             <button onclick="downloadBackup()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50">
-                <span class="material-symbols-outlined text-sm">history</span> Backup
+                <span class="material-symbols-outlined text-sm">save</span> <span class="hidden sm:inline">Backup</span>
             </button>
             <button onclick="sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 shadow-sm">
-                <span class="material-symbols-outlined text-sm">cloud_done</span> Sync
+                <span class="material-symbols-outlined text-sm">cloud_upload</span> <span class="hidden sm:inline">Sync</span>
             </button>
         </div>
     </header>
 
     <main class="flex-1 flex flex-col max-w-5xl mx-auto w-full p-4 gap-4" id="gameUI" style="display:none;">
-        
         <div class="grid grid-cols-2 gap-4">
-            <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
-                <p id="lblHome" class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Home</p>
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+                <p id="lblHome" class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Nous</p>
                 <p id="scoreHome" class="text-7xl font-bold tracking-tighter text-primary">0</p>
             </div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
-                <p id="lblAway" class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Away</p>
-                <p id="scoreAway" class="text-7xl font-bold tracking-tighter text-gray-800 dark:text-white">0</p>
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+                <p id="lblAway" class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Eux</p>
+                <p id="scoreAway" class="text-7xl font-bold tracking-tighter text-gray-800">0</p>
             </div>
         </div>
 
         <div class="flex items-center justify-between px-2">
-            <h4 class="text-[#616f89] text-xs font-bold leading-normal tracking-widest uppercase">Court View</h4>
-            <div class="flex items-center gap-2">
-                <span class="size-2 rounded-full bg-red-500 animate-pulse"></span>
-                <span class="text-xs font-bold text-gray-500 uppercase">Live</span>
-            </div>
+            <h4 class="text-[#616f89] text-xs font-bold uppercase">Terrain</h4>
+            <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-red-500 animate-pulse"></span><span class="text-xs font-bold text-gray-500 uppercase">Live</span></div>
         </div>
 
         <div class="relative w-full aspect-[4/3] max-h-[450px] court-wood rounded-xl border-[6px] border-white shadow-lg overflow-hidden flex flex-col">
-            
             <div class="flex-1 border-b-[3px] border-white/80 relative" id="cAway">
                 <div class="absolute bottom-0 w-full h-1 bg-transparent z-0"></div>
-                <div onclick="openSub('away', 0)" class="absolute top-[20%] left-[80%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="a_p1" class="player-circle bg-white text-gray-800 border-gray-200">?</div>
-                </div>
-                <div onclick="openSub('away', 5)" class="absolute top-[20%] left-[50%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="a_p6" class="player-circle bg-white text-gray-800 border-gray-200">?</div>
-                </div>
-                <div onclick="openSub('away', 4)" class="absolute top-[20%] left-[20%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="a_p5" class="player-circle bg-white text-gray-800 border-gray-200">?</div>
-                </div>
-                <div onclick="openSub('away', 1)" class="absolute top-[70%] left-[80%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="a_p2" class="player-circle bg-white text-gray-800 border-gray-200">?</div>
-                </div>
-                <div onclick="openSub('away', 2)" class="absolute top-[70%] left-[50%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="a_p3" class="player-circle bg-white text-gray-800 border-gray-200">?</div>
-                </div>
-                <div onclick="openSub('away', 3)" class="absolute top-[70%] left-[20%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="a_p4" class="player-circle bg-white text-gray-800 border-gray-200">?</div>
-                </div>
+                <div onclick="openSub('away', 0)" class="absolute top-[20%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="a_p1" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
+                <div onclick="openSub('away', 5)" class="absolute top-[20%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="a_p6" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
+                <div onclick="openSub('away', 4)" class="absolute top-[20%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="a_p5" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
+                <div onclick="openSub('away', 1)" class="absolute top-[70%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="a_p2" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
+                <div onclick="openSub('away', 2)" class="absolute top-[70%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="a_p3" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
+                <div onclick="openSub('away', 3)" class="absolute top-[70%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="a_p4" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
             </div>
-
-            <div class="h-4 bg-gray-900/10 backdrop-blur-[1px] net-pattern relative z-10 flex items-center justify-center">
-                <div class="h-0.5 w-full bg-white/50"></div>
-            </div>
-
+            <div class="h-4 bg-gray-900/10 backdrop-blur-[1px] net-pattern relative z-10 flex items-center justify-center"><div class="h-0.5 w-full bg-white/50"></div></div>
             <div class="flex-1 relative" id="cHome">
-                <div onclick="openSub('home', 3)" class="absolute top-[30%] left-[20%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="h_p4" class="player-circle bg-primary text-white border-white">?</div>
-                </div>
-                <div onclick="openSub('home', 2)" class="absolute top-[30%] left-[50%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="h_p3" class="player-circle bg-primary text-white border-white">?</div>
-                </div>
-                <div onclick="openSub('home', 1)" class="absolute top-[30%] left-[80%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="h_p2" class="player-circle bg-primary text-white border-white">?</div>
-                </div>
-                <div onclick="openSub('home', 4)" class="absolute top-[80%] left-[20%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="h_p5" class="player-circle bg-primary text-white border-white">?</div>
-                </div>
-                <div onclick="openSub('home', 5)" class="absolute top-[80%] left-[50%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="h_p6" class="player-circle bg-primary text-white border-white">?</div>
-                </div>
-                <div onclick="openSub('home', 0)" class="absolute top-[80%] left-[80%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                    <div id="h_p1" class="player-circle bg-primary text-white border-white">?</div>
-                </div>
+                <div onclick="openSub('home', 3)" class="absolute top-[30%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="h_p4" class="player-circle bg-primary text-white border-white">?</div></div>
+                <div onclick="openSub('home', 2)" class="absolute top-[30%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="h_p3" class="player-circle bg-primary text-white border-white">?</div></div>
+                <div onclick="openSub('home', 1)" class="absolute top-[30%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="h_p2" class="player-circle bg-primary text-white border-white">?</div></div>
+                <div onclick="openSub('home', 4)" class="absolute top-[80%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="h_p5" class="player-circle bg-primary text-white border-white">?</div></div>
+                <div onclick="openSub('home', 5)" class="absolute top-[80%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="h_p6" class="player-circle bg-primary text-white border-white">?</div></div>
+                <div onclick="openSub('home', 0)" class="absolute top-[80%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="h_p1" class="player-circle bg-primary text-white border-white">?</div></div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 h-40 overflow-y-auto">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-sm">list_alt</span> History
-                </p>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-40 overflow-y-auto">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><span class="material-symbols-outlined text-sm">list_alt</span> Historique</p>
                 <div id="historyLog" class="space-y-2 text-sm"></div>
             </div>
-            
-            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 flex flex-col justify-center">
-                <button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg text-sm font-bold hover:bg-red-100 transition-colors uppercase tracking-widest">
-                    🏁 End Set (Auto-Save)
-                </button>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex flex-col justify-center">
+                <button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg text-sm font-bold hover:bg-red-100 transition-colors uppercase tracking-widest">🏁 Fin du Set (Sauvegarder)</button>
             </div>
         </div>
     </main>
 
-    <div class="bg-white dark:bg-bg-dark border-t border-gray-200 dark:border-gray-800 p-4 sticky bottom-0 z-50">
+    <div class="bg-white border-t border-gray-200 p-4 sticky bottom-0 z-50">
         <div class="max-w-5xl mx-auto grid grid-cols-2 gap-4">
-            <button onclick="openScoreModal('home')" class="flex flex-col items-center justify-center py-4 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform">
-                <span class="material-symbols-outlined text-3xl mb-1">add_circle</span>
-                <span class="text-sm font-bold uppercase tracking-widest">+ Point Home</span>
-            </button>
-            <button onclick="openScoreModal('away')" class="flex flex-col items-center justify-center py-4 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform">
-                <span class="material-symbols-outlined text-3xl mb-1">add_circle</span>
-                <span class="text-sm font-bold uppercase tracking-widest">+ Point Away</span>
-            </button>
+            <button onclick="openScoreModal('home')" class="flex flex-col items-center justify-center py-4 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform"><span class="material-symbols-outlined text-3xl mb-1">add_circle</span><span class="text-sm font-bold uppercase">+ Point Nous</span></button>
+            <button onclick="openScoreModal('away')" class="flex flex-col items-center justify-center py-4 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform"><span class="material-symbols-outlined text-3xl mb-1">add_circle</span><span class="text-sm font-bold uppercase">+ Point Eux</span></button>
         </div>
     </div>
 
     <script>
-        // Initialisation globale
         let game = new VolleyMatch();
 
-        // --- SETUP WIZARD ---
         function showStep(id) {
             ['stepLoad', 'step1', 'step2'].forEach(s => document.getElementById(s).classList.add('hidden'));
             document.getElementById(id).classList.remove('hidden');
+        }
+
+        // --- IMPORT EXCEL ---
+        function importHomeTeamFromExcel(input) {
+            const file = input.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                // On récupère les données ligne par ligne (Array of Arrays)
+                const rows = XLSX.utils.sheet_to_json(worksheet, {header: 1});
+
+                // Vider la liste actuelle
+                const container = document.getElementById('homeRosterList');
+                container.innerHTML = "";
+
+                // Parcourir les lignes (On saute la ligne 0 si c'est les titres)
+                let count = 0;
+                rows.forEach((row, index) => {
+                    // Structure attendue : COL 0=Nom, 1=Prénom, 2=Num, 3=Rôle
+                    // On vérifie s'il y a un numéro (Colonne 2) pour savoir si c'est un joueur
+                    const num = row[2];
+                    
+                    if (num && !isNaN(num)) {
+                        addPlayerRow('home', count); // Créer les inputs vides
+                        
+                        // Remplir les inputs
+                        const nom = row[0] || "";
+                        const prenom = row[1] || "";
+                        const role = row[3] || "?";
+
+                        document.getElementById(`home_num_${count}`).value = num;
+                        document.getElementById(`home_name_${count}`).value = `${prenom} ${nom}`; // Format : Prénom Nom
+                        
+                        // Essayer de mapper le rôle
+                        const roleSelect = document.getElementById(`home_role_${count}`);
+                        // Si le texte du rôle correspond à une option, le navigateur le sélectionnera
+                        // Sinon on essaie de deviner ou on laisse ?
+                        roleSelect.value = mapExcelRole(role);
+                        
+                        count++;
+                    }
+                });
+                alert(`${count} joueurs importés !`);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function mapExcelRole(roleText) {
+            // Petite aide pour convertir les rôles Excel vers les codes App
+            if(!roleText) return "?";
+            const r = roleText.toString().toUpperCase();
+            if(r.includes("POINT") || r.includes("RECEP") || r === "OH") return "OH";
+            if(r.includes("CENTRAL") || r === "MB") return "MB";
+            if(r.includes("PASS") || r === "S") return "S";
+            if(r.includes("OPPO") || r === "OPP") return "OPP";
+            if(r.includes("LIB") || r === "L") return "L";
+            return "?";
         }
 
         function initRostersUI() {
@@ -403,15 +357,13 @@
         function addPlayerRow(team, idx) {
             const container = document.getElementById(team + 'RosterList');
             const div = document.createElement('div');
-            div.className = "flex gap-2 items-center";
-            
-            let html = `<span class="text-xs font-bold w-6 text-gray-400">Z${idx+1}</span>
-                        <input type="number" id="${team}_num_${idx}" placeholder="#" class="w-12 p-1 text-sm border rounded">`;
-            
+            div.className = "flex gap-2 items-center mb-2";
+            let html = `<span class="text-xs font-bold w-6 text-gray-400">#${idx+1}</span>
+                        <input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-14 p-2 text-sm border rounded bg-gray-50">`;
             if(team === 'home') {
-                html += `<input type="text" id="${team}_name_${idx}" placeholder="Name" class="flex-1 p-1 text-sm border rounded">
-                         <select id="${team}_role_${idx}" class="p-1 text-sm border rounded w-16">
-                            <option value="?">?</option><option value="OH">OH</option><option value="MB">MB</option><option value="S">S</option><option value="OPP">OPP</option><option value="L">L</option>
+                html += `<input type="text" id="${team}_name_${idx}" placeholder="Nom" class="flex-1 p-2 text-sm border rounded bg-gray-50">
+                         <select id="${team}_role_${idx}" class="p-2 text-sm border rounded w-20 bg-gray-50">
+                            <option value="?">?</option><option value="OH">R4</option><option value="MB">C</option><option value="S">P</option><option value="OPP">Pt</option><option value="L">L</option>
                          </select>`;
             }
             div.innerHTML = html;
@@ -419,24 +371,21 @@
         }
 
         function startGame() {
-            // 1. Get Values
             const hName = document.getElementById('homeName').value;
             const aName = document.getElementById('awayName').value;
             const server = document.getElementById('firstServer').value;
 
-            // 2. Parse Rosters
             const parse = (team) => {
                 const list = document.getElementById(team+'RosterList').children;
                 let roster = [], starters = [];
                 for(let i=0; i<list.length; i++) {
                     let num = document.getElementById(`${team}_num_${i}`).value;
                     let nameEl = document.getElementById(`${team}_name_${i}`);
-                    let name = nameEl ? nameEl.value : 'Opp#'+num;
+                    let name = nameEl ? nameEl.value : 'Adv#'+num;
                     let roleEl = document.getElementById(`${team}_role_${i}`);
                     let role = roleEl ? roleEl.value : '?';
-                    
                     if(num) {
-                        let p = { num, name: name || 'P'+num, role, id: i };
+                        let p = { num, name: name || 'J'+num, role, id: i };
                         roster.push(p);
                         if(i < 6) starters.push(p);
                     }
@@ -445,22 +394,15 @@
                 return { all: roster, court: starters };
             };
 
-            const h = parse('home');
-            const a = parse('away');
-            
-            // 3. Initialize Engine
+            const h = parse('home'); const a = parse('away');
             game.initializeMatch(hName, aName, server, h.all, h.court, a.all, a.court);
-
-            // 4. Show UI
             document.getElementById('setupModal').classList.add('hidden');
             document.getElementById('gameUI').style.display = 'flex';
             updateScreen();
         }
 
-        // --- UPDATE UI ---
         function updateScreen() {
             const s = game.state;
-
             document.getElementById('lblHome').innerText = s.home.name;
             document.getElementById('lblAway').innerText = s.away.name;
             document.getElementById('scoreHome').innerText = s.home.score;
@@ -470,42 +412,35 @@
             document.getElementById('gSetAway').innerText = s.away.sets;
             document.getElementById('matchVersus').innerText = `${s.home.name} vs ${s.away.name}`;
 
-            // Draw Court
             const draw = (team, prefix) => {
                 s[team].onCourt.forEach((p, i) => {
                     const el = document.getElementById(`${prefix}${i+1}`);
                     if(el) {
-                        el.innerHTML = `<span class="text-lg">${p.num}</span><span class="text-[8px] uppercase">${p.role || ''}</span>`;
+                        el.innerHTML = `<span class="text-xl">${p.num}</span><span class="text-[9px] uppercase mt-[-4px]">${p.role || ''}</span>`;
                         if(s.server === team && i === 0) el.classList.add('server-indicator');
                         else el.classList.remove('server-indicator');
                     }
                 });
             };
-            draw('home', 'h_p'); 
-            draw('away', 'a_p');
+            draw('home', 'h_p'); draw('away', 'a_p');
 
-            // History Log (Last 3)
             const logDiv = document.getElementById('historyLog');
             logDiv.innerHTML = s.history.slice(-3).reverse().map(h => `
                 <div class="flex justify-between items-center border-b pb-1">
-                    <span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} Point</span>
+                    <span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span>
                     <span class="text-xs bg-gray-100 px-2 rounded">${h.action} (${h.actor_num})</span>
                 </div>
             `).join('');
         }
 
-        // --- SCORING ---
         function openScoreModal(winner) {
             game.state.tempPoint = { winner, actorTeam: null, actorNum: null };
-            document.getElementById('scoreTitle').innerText = `Point for ${game.state[winner].name}`;
-            
+            document.getElementById('scoreTitle').innerText = `Point pour ${game.state[winner].name}`;
             document.getElementById('actionsWinner').classList.add('hidden');
             document.getElementById('actionsLoser').classList.add('hidden');
-
             const loser = winner === 'home' ? 'away' : 'home';
             fillGrid('gridWinners', winner, true);
             fillGrid('gridLosers', loser, false);
-            
             document.getElementById('scoreModal').classList.remove('hidden');
         }
 
@@ -513,15 +448,12 @@
             const div = document.getElementById(elemId); div.innerHTML = '';
             game.state[team].onCourt.forEach(p => {
                 let btn = document.createElement('button');
-                btn.className = "h-10 w-10 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition";
+                btn.className = "h-10 w-10 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition shadow-sm";
                 btn.innerText = p.num;
                 btn.onclick = () => {
                     Array.from(div.children).forEach(c => c.classList.remove('bg-primary', 'text-white'));
                     btn.classList.add('bg-primary', 'text-white');
-                    
-                    game.state.tempPoint.actorTeam = team; 
-                    game.state.tempPoint.actorNum = p.num;
-                    
+                    game.state.tempPoint.actorTeam = team; game.state.tempPoint.actorNum = p.num;
                     document.getElementById(isPos ? 'actionsWinner' : 'actionsLoser').classList.remove('hidden');
                     document.getElementById(isPos ? 'actionsLoser' : 'actionsWinner').classList.add('hidden');
                 };
@@ -530,85 +462,53 @@
         }
 
         function finalizeScore(action) {
-            game.scorePoint(game.state.tempPoint.winner, {
-                action: action,
-                actorTeam: game.state.tempPoint.actorTeam,
-                actorNum: game.state.tempPoint.actorNum
-            });
+            game.scorePoint(game.state.tempPoint.winner, { action: action, actorTeam: game.state.tempPoint.actorTeam, actorNum: game.state.tempPoint.actorNum });
             document.getElementById('scoreModal').classList.add('hidden');
             updateScreen();
         }
 
-        // --- SUBS ---
         function openSub(team, idx) {
             game.state.subTarget = { team, idx };
             const sel = document.getElementById('subInSelect'); sel.innerHTML = '';
-            
             const currentIds = game.state[team].onCourt.map(p => p.num);
             game.state[team].players.forEach(p => {
                 if(!currentIds.includes(p.num)) {
-                    let opt = document.createElement('option');
-                    opt.value = p.num; opt.innerText = `#${p.num} ${p.name}`;
-                    sel.appendChild(opt);
+                    let opt = document.createElement('option'); opt.value = p.num; opt.innerText = `#${p.num} ${p.name}`; sel.appendChild(opt);
                 }
             });
-            
             document.getElementById('subOutName').innerText = game.state[team].onCourt[idx].name;
             document.getElementById('subModal').classList.remove('hidden');
         }
 
         function confirmSub() {
-            const val = document.getElementById('subInSelect').value;
-            game.substitute(game.state.subTarget.team, game.state.subTarget.idx, val);
+            game.substitute(game.state.subTarget.team, game.state.subTarget.idx, document.getElementById('subInSelect').value);
             document.getElementById('subModal').classList.add('hidden');
             updateScreen();
         }
 
-        // --- GLOBAL ACTIONS ---
-        function endSet() {
-            if(game.endSet()) {
-                downloadBackup();
-                updateScreen();
-            }
-        }
-
+        function endSet() { if(game.endSet()) { downloadBackup(); updateScreen(); } }
         function downloadBackup() {
-            const data = game.generateBackupJSON();
-            const a = document.createElement('a');
-            a.href = data; 
-            a.download = `VOLLEY_BACKUP_${Date.now()}.json`;
-            document.body.appendChild(a); a.click(); a.remove();
+            const a = document.createElement('a'); a.href = game.generateBackupJSON(); a.download = `VOLLEY_BACKUP_${Date.now()}.json`; document.body.appendChild(a); a.click(); a.remove();
         }
-
         function loadGameFromFile(input) {
-            const file = input.files[0];
-            if(!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            const file = input.files[0]; if(!file) return;
+            const r = new FileReader();
+            r.onload = (e) => {
                 if(game.loadFromJSON(e.target.result)) {
                     document.getElementById('setupModal').classList.add('hidden');
                     document.getElementById('gameUI').style.display = 'flex';
                     updateScreen();
-                    alert("Game Loaded!");
-                } else {
-                    alert("Invalid JSON");
-                }
+                    alert("Partie chargée !");
+                } else alert("Fichier invalide");
             };
-            reader.readAsText(file);
+            r.readAsText(file);
         }
-
         async function sendToDB() {
-            if(!confirm("Sync to Cloud DB?")) return;
-            const payload = game.state;
+            if(!confirm("Synchroniser vers le Cloud ?")) return;
             try {
-                const res = await fetch('/api/save_match', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                const json = await res.json();
-                alert(json.message);
-            } catch(e) { alert("Error connecting to Cloud: " + e); }
+                const res = await fetch('/api/save_match', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(game.state) });
+                const json = await res.json(); alert(json.message);
+            } catch(e) { alert("Erreur Cloud : " + e); }
         }
     </script>
 </body>
