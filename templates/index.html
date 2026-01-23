@@ -3,114 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VolleyLive Pro - Backup & Restore</title>
+    <title>VolleyStats Pro - Master</title>
     <style>
-        :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; background: #f4f4f4; user-select: none; }
+        /* CSS BASIQUE MAIS FONCTIONNEL */
+        :root { --primary: #2c3e50; --accent: #e74c3c; --success: #27ae60; --light: #ecf0f1; }
+        body { font-family: sans-serif; margin: 0; padding: 10px; background: #f4f4f4; user-select: none; }
         .hidden { display: none !important; }
         
-        /* LAYOUT & BOUTONS */
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 15px; border-radius: 8px; display: none; }
-        .btn { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; width: 100%; color:white; margin-bottom: 5px; transition: 0.2s;}
-        .btn:hover { opacity: 0.9; transform: scale(0.99); }
+        /* Conteneur Principal */
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        /* Boutons */
+        .btn { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; color: white; margin-bottom: 5px; font-size: 1rem; }
+        .btn:hover { opacity: 0.9; }
         .btn-green { background: var(--success); }
         .btn-blue { background: var(--primary); }
         .btn-red { background: var(--accent); }
-        .btn-gray { background: #7f8c8d; }
+        .btn-gray { background: #95a5a6; }
         .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
 
-        /* HEADER */
-        .top-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 10px;}
-        .global-sets { font-size: 1.5rem; font-weight: bold; color: var(--primary); background: #eee; padding: 5px 15px; border-radius: 20px; }
+        /* Header & Score */
+        .top-bar { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .scoreboard { display: flex; justify-content: center; align-items: center; gap: 30px; margin: 15px 0; font-size: 3rem; font-weight: 800; color: #333; }
+        .sets-display { font-size: 1.2rem; background: #eee; padding: 5px 15px; border-radius: 20px; color: #555; }
 
-        /* SCOREBOARD */
-        .scoreboard { display: flex; justify-content: center; align-items: center; gap: 40px; margin: 10px 0; font-size: 3.5rem; font-weight: 800; color: #333; }
-        .score-box { text-align: center; }
-        .score-label { font-size: 1rem; color: #666; display: block; font-weight: normal; }
-
-        /* TERRAIN */
-        .court-container { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
-        .court-side { border: 3px solid #333; width: 49%; height: 320px; position: relative; background: #fff; border-radius: 4px; }
-        .net { position: absolute; top: 0; bottom: 0; width: 6px; background: black; z-index: 10; }
+        /* Terrain de Volley */
+        .court-container { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
+        .court-side { border: 3px solid #333; width: 49%; height: 300px; position: relative; background: #fff; }
+        .net { position: absolute; top: 0; bottom: 0; width: 4px; background: black; z-index: 10; }
         .left-net { left: 100%; } .right-net { left: 0; }
         
+        /* Joueurs (Ronds) */
         .player-pos { 
-            width: 45px; height: 45px; background: white; border: 2px solid #ccc; 
+            width: 40px; height: 40px; background: white; border: 2px solid #ccc; border-radius: 50%;
             position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; 
-            font-size: 0.9em; border-radius: 50%; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); 
-            cursor: pointer; 
+            font-size: 0.8em; font-weight: bold; cursor: pointer; z-index: 5;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
         }
-        .player-pos.server { border-color: var(--accent); border-width: 3px; background: #fff5f5; }
+        .player-pos.server { border-color: var(--accent); border-width: 3px; background: #fff5e6; }
         
-        /* POSITIONS */
+        /* Positions (Z1-Z6) */
         .p4 { top: 20%; left: 20%; } .p3 { top: 20%; left: 50%; } .p2 { top: 20%; left: 80%; }
         .p5 { top: 70%; left: 20%; } .p6 { top: 70%; left: 50%; } .p1 { top: 70%; left: 80%; }
+        /* Miroir pour l'adversaire */
         .right-side .p2 { left: 20%; } .right-side .p3 { left: 50%; } .right-side .p4 { left: 80%; }
         .right-side .p1 { left: 20%; } .right-side .p6 { left: 50%; } .right-side .p5 { left: 80%; }
 
-        /* MODALES */
-        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(44, 62, 80, 0.95); z-index:100; display: flex; align-items: center; justify-content: center; }
-        .modal-box { background: white; width: 95%; max-width: 600px; padding: 20px; border-radius: 12px; overflow-y: auto; max-height: 90vh; }
+        /* Modales */
+        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index:100; display: flex; align-items: center; justify-content: center; }
+        .modal-box { background: white; width: 95%; max-width: 600px; padding: 20px; border-radius: 10px; max-height: 90vh; overflow-y: auto; }
         
-        /* INPUTS & GRID */
-        .player-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin: 10px 0; }
-        .player-btn { background: #ecf0f1; border: 1px solid #bdc3c7; padding: 10px 2px; border-radius: 4px; font-weight: bold; cursor: pointer; text-align: center;}
-        .player-btn.selected { background: var(--primary); color: white; }
-        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .action-btn { padding: 10px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; background: white; }
-        .act-good { border-left: 5px solid var(--success); } .act-bad { border-left: 5px solid var(--accent); }
+        /* Grilles de sélection */
+        .grid-players { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin: 10px 0; }
+        .sel-btn { padding: 10px; border: 1px solid #ddd; text-align: center; cursor: pointer; border-radius: 4px; }
+        .sel-btn.selected { background: var(--primary); color: white; }
         
-        /* ZONE CHARGEMENT */
-        .load-zone { border: 2px dashed #ccc; padding: 20px; text-align: center; margin-bottom: 20px; border-radius: 8px; cursor: pointer; }
-        .load-zone:hover { border-color: var(--primary); background: #f0f8ff; }
+        .grid-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .act-btn { padding: 15px; border: 1px solid #ddd; cursor: pointer; border-radius: 4px; text-align: center; font-weight: bold; }
+        .act-good { border-left: 5px solid var(--success); }
+        .act-bad { border-left: 5px solid var(--accent); }
     </style>
 </head>
 <body>
 
 <div id="setupModal" class="modal-overlay">
     <div class="modal-box">
-        
         <div id="stepLoad">
-            <h2>Bienvenue Coach</h2>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                <button class="btn btn-green" onclick="goToNewGame()">⭐ Nouveau Match</button>
-                
-                <div class="load-zone" onclick="document.getElementById('fileInput').click()">
-                    📂 <b>Charger une Sauvegarde</b><br>
-                    <span style="font-size:0.8em; color:#666;">(Fichier .json)</span>
-                    <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="loadGameFromFile(this)">
-                </div>
+            <h2>VolleyStats Pro</h2>
+            <button class="btn btn-green" onclick="showStep('step1')">⭐ Nouveau Match</button>
+            <div style="margin-top:20px; border: 2px dashed #ccc; padding: 20px; text-align: center; cursor: pointer;" onclick="document.getElementById('fileInput').click()">
+                📂 Charger une Sauvegarde JSON
+                <input type="file" id="fileInput" accept=".json" style="display: none;" onchange="loadGameFromFile(this)">
             </div>
         </div>
 
         <div id="step1" class="hidden">
-            <h2>Nouveau Match</h2>
-            <p><label>Nous (Domicile)</label><input type="text" id="homeName" value="Mon Club" style="width:100%; padding:5px;"></p>
-            <p><label>Eux (Extérieur)</label><input type="text" id="awayName" value="Adversaire" style="width:100%; padding:5px;"></p>
-            <p><label>Premier Service</label><select id="firstServer" style="width:100%; padding:5px;"><option value="home">Nous</option><option value="away">Eux</option></select></p>
-            <button class="btn btn-green" onclick="toStep2()">Suivant</button>
-            <button class="btn btn-gray" onclick="location.reload()">Annuler</button>
+            <h3>Configuration Match</h3>
+            <label>Nous (Domicile)</label><input type="text" id="homeName" value="Mon Club" style="width:100%; padding:8px; margin-bottom:10px;">
+            <label>Eux (Extérieur)</label><input type="text" id="awayName" value="Adversaire" style="width:100%; padding:8px; margin-bottom:10px;">
+            <label>Premier Service</label>
+            <select id="firstServer" style="width:100%; padding:8px; margin-bottom:20px;">
+                <option value="home">Nous</option>
+                <option value="away">Eux</option>
+            </select>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-gray" onclick="showStep('stepLoad')">Retour</button>
+                <button class="btn btn-green" onclick="initRostersUI(); showStep('step2')">Suivant</button>
+            </div>
         </div>
 
         <div id="step2" class="hidden">
             <h3>Effectifs</h3>
-            <div style="display:flex; gap:10px;">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
                 <div style="flex:1">
                     <h4>Nous</h4>
                     <div id="homeRosterList"></div>
                     <button class="btn btn-gray" onclick="addPlayerRow('home')">+ Joueur</button>
                 </div>
-                <div style="flex:1; border-left:1px solid #eee; padding-left:10px;">
-                    <h4>Eux</h4>
-                    <p style="font-size:0.8em; color:#666;">Juste les numéros</p>
+                <div style="flex:1; border-left:1px solid #ccc; padding-left:10px;">
+                    <h4>Eux (N° seulement)</h4>
                     <div id="awayRosterList"></div>
                     <button class="btn btn-gray" onclick="addPlayerRow('away')">+ Joueur</button>
                 </div>
             </div>
-            <br>
             <div style="display:flex; gap:10px;">
-                <button class="btn btn-gray" onclick="document.getElementById('step2').classList.add('hidden'); document.getElementById('step1').classList.remove('hidden');">Retour</button>
-                <button class="btn btn-green" onclick="startGame()">Lancer Match</button>
+                <button class="btn btn-gray" onclick="showStep('step1')">Retour</button>
+                <button class="btn btn-green" onclick="startGame()">Lancer le Match 🏐</button>
             </div>
         </div>
     </div>
@@ -118,29 +116,33 @@
 
 <div id="scoreModal" class="modal-overlay hidden">
     <div class="modal-box">
-        <h3 id="scoreTitle" style="text-align:center; margin:0;">Point...</h3>
+        <h3 id="scoreTitle" style="text-align:center;">Point...</h3>
+        
         <div id="secWinner">
-            <h4 style="color: var(--success); margin:5px 0;">1. Point Gagnant (Notre Action)</h4>
-            <div class="player-grid" id="gridWinners"></div>
-            <div id="actionsWinner" class="action-grid hidden">
-                <button class="action-btn act-good" onclick="finalizeScore('Attaque')">Attaque</button>
-                <button class="action-btn act-good" onclick="finalizeScore('Block')">Block</button>
-                <button class="action-btn act-good" onclick="finalizeScore('Ace')">Ace</button>
-                <button class="action-btn act-good" onclick="finalizeScore('Feinte')">Feinte</button>
+            <h4 style="color:var(--success); margin:5px 0;">1. Point Gagnant (Notre Action)</h4>
+            <div id="gridWinners" class="grid-players"></div>
+            <div id="actionsWinner" class="grid-actions hidden">
+                <div class="act-btn act-good" onclick="finalizeScore('Attaque')">Attaque</div>
+                <div class="act-btn act-good" onclick="finalizeScore('Block')">Block</div>
+                <div class="act-btn act-good" onclick="finalizeScore('Ace')">Ace</div>
+                <div class="act-btn act-good" onclick="finalizeScore('Feinte')">Feinte</div>
             </div>
         </div>
-        <hr>
+
+        <hr style="margin:15px 0;">
+
         <div id="secLoser">
-            <h4 style="color: var(--accent); margin:5px 0;">2. Faute Adverse (Leur Erreur)</h4>
-            <div class="player-grid" id="gridLosers"></div>
-            <div id="actionsLoser" class="action-grid hidden">
-                <button class="action-btn act-bad" onclick="finalizeScore('Attaque Out')">Attaque Out</button>
-                <button class="action-btn act-bad" onclick="finalizeScore('Faute Filet')">Filet</button>
-                <button class="action-btn act-bad" onclick="finalizeScore('Faute Service')">Service Raté</button>
-                <button class="action-btn act-bad" onclick="finalizeScore('Faute Main')">Faute Main</button>
+            <h4 style="color:var(--accent); margin:5px 0;">2. Faute Adverse (Leur Erreur)</h4>
+            <div id="gridLosers" class="grid-players"></div>
+            <div id="actionsLoser" class="grid-actions hidden">
+                <div class="act-btn act-bad" onclick="finalizeScore('Attaque Out')">Attaque Out</div>
+                <div class="act-btn act-bad" onclick="finalizeScore('Faute Filet')">Filet</div>
+                <div class="act-btn act-bad" onclick="finalizeScore('Faute Service')">Service Raté</div>
+                <div class="act-btn act-bad" onclick="finalizeScore('Faute Main')">Faute Main</div>
             </div>
         </div>
-        <button class="btn btn-gray" onclick="closeScoreModal()" style="margin-top:10px;">Annuler</button>
+
+        <button class="btn btn-gray" onclick="closeModal('scoreModal')" style="margin-top:15px;">Annuler</button>
     </div>
 </div>
 
@@ -148,29 +150,36 @@
     <div class="modal-box">
         <h3>Changement</h3>
         <p>Sortie : <strong id="subOutName">...</strong></p>
-        <select id="subInSelect" style="width:100%; padding:10px; margin-bottom:10px;"></select>
+        <select id="subInSelect" style="width:100%; padding:10px; margin-bottom:15px;"></select>
         <button class="btn btn-green" onclick="confirmSub()">Confirmer</button>
-        <button class="btn btn-gray" onclick="closeSubModal()">Annuler</button>
+        <button class="btn btn-gray" onclick="closeModal('subModal')">Annuler</button>
     </div>
 </div>
 
-<div class="container" id="gameUI">
+<div class="container" id="gameUI" style="display:none;">
+    
     <div class="top-bar">
         <div>
             <strong>Set <span id="setNum">1</span></strong>
             <div id="matchVersus" style="font-size:0.8em; color:#666;"></div>
         </div>
-        <div class="global-sets">Sets : <span id="gSetHome">0</span> - <span id="gSetAway">0</span></div>
+        <div class="sets-display">Sets : <span id="gSetHome">0</span> - <span id="gSetAway">0</span></div>
         <div style="display:flex; gap:5px;">
-            <button class="btn btn-gray" onclick="downloadBackupJSON()" style="font-size:0.8rem; width:auto;">💾 Backup</button>
-            <button class="btn btn-blue" onclick="sendToDB()" style="font-size:0.8rem; width:auto;">☁️ Cloud</button>
+            <button class="btn btn-gray" style="width:auto; font-size:0.8rem;" onclick="downloadBackup()">💾 Backup</button>
+            <button class="btn btn-blue" style="width:auto; font-size:0.8rem;" onclick="sendToDB()">☁️ Envoyer</button>
         </div>
     </div>
 
     <div class="scoreboard">
-        <div class="score-box"><span class="score-label" id="lblHome">Nous</span><span id="scoreHome">0</span></div>
+        <div style="text-align:center;">
+            <span style="font-size:1rem; display:block; color:#666;" id="lblHome">Nous</span>
+            <span id="scoreHome">0</span>
+        </div>
         <div>-</div>
-        <div class="score-box"><span class="score-label" id="lblAway">Eux</span><span id="scoreAway">0</span></div>
+        <div style="text-align:center;">
+            <span style="font-size:1rem; display:block; color:#666;" id="lblAway">Eux</span>
+            <span id="scoreAway">0</span>
+        </div>
     </div>
 
     <div class="court-container">
@@ -194,7 +203,7 @@
         </div>
     </div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
         <button class="btn btn-blue" onclick="openScoreModal('home')">+ POINT NOUS</button>
         <button class="btn btn-blue" onclick="openScoreModal('away')">+ POINT EUX</button>
     </div>
@@ -208,29 +217,27 @@
 </div>
 
 <script>
-    // --- ETAT GLOBAL ---
+    // --- ETAT DU JEU (MODEL) ---
     let state = {
         home: { name: "", score: 0, sets: 0, players: [], onCourt: [] },
         away: { name: "", score: 0, sets: 0, players: [], onCourt: [] },
-        server: null,
+        server: null, // 'home' ou 'away'
         set: 1,
         history: [],
         tempPoint: {}
     };
 
-    // --- NAVIGATION SETUP ---
-    function goToNewGame() {
-        document.getElementById('stepLoad').classList.add('hidden');
-        document.getElementById('step1').classList.remove('hidden');
+    // --- NAVIGATION & SETUP ---
+    function showStep(id) {
+        ['stepLoad', 'step1', 'step2'].forEach(s => document.getElementById(s).classList.add('hidden'));
+        document.getElementById(id).classList.remove('hidden');
     }
 
-    function toStep2() {
-        document.getElementById('step1').classList.add('hidden');
-        document.getElementById('step2').classList.remove('hidden');
-        if(document.getElementById('homeRosterList').innerHTML==="") for(let i=0;i<8;i++) addPlayerRow('home', i);
-        if(document.getElementById('awayRosterList').innerHTML==="") for(let i=0;i<8;i++) addPlayerRow('away', i);
+    function initRostersUI() {
+        if(document.getElementById('homeRosterList').innerHTML === "") for(let i=0; i<8; i++) addPlayerRow('home', i);
+        if(document.getElementById('awayRosterList').innerHTML === "") for(let i=0; i<8; i++) addPlayerRow('away', i);
     }
-    
+
     function addPlayerRow(team, idx) {
         const container = document.getElementById(team + 'RosterList');
         const count = container.children.length;
@@ -238,262 +245,227 @@
         div.style.marginBottom = "5px";
         const lbl = count < 6 ? `<b>Z${count+1}</b>` : `<span style="color:#999">R</span>`;
         
-        let inputs = "";
-        
-        if (team === 'home') {
-            // NOUS : Nom complet + Rôle
-            inputs = `
-                <input type="number" id="${team}_num_${count}" placeholder="#" style="width:40px">
-                <input type="text" id="${team}_name_${count}" placeholder="Nom" style="width:80px">
-                <select id="${team}_role_${count}" style="width:60px">
-                    <option value="?">?</option><option value="P">P</option><option value="R4">R4</option><option value="C">C</option><option value="Pt">Pt</option><option value="L">L</option>
-                </select>
-            `;
-        } else {
-            // EUX : Juste Numéro (Simplifié)
-            inputs = `
-                <input type="number" id="${team}_num_${count}" placeholder="#" style="width:60px">
-            `;
+        let html = `${lbl} <input type="number" id="${team}_num_${count}" placeholder="#" style="width:50px; padding:5px;">`;
+        if(team === 'home') {
+            html += ` <input type="text" id="${team}_name_${count}" placeholder="Nom" style="width:80px; padding:5px;">
+                      <select id="${team}_role_${count}" style="padding:5px;">
+                        <option value="?">?</option><option value="P">P</option><option value="R4">R4</option><option value="C">C</option><option value="Pt">Pt</option><option value="L">L</option>
+                      </select>`;
         }
-
-        div.innerHTML = `${lbl} ${inputs}`;
+        div.innerHTML = html;
         container.appendChild(div);
     }
 
+    // --- DEMARRAGE ---
     function startGame() {
+        // 1. Noms
         state.home.name = document.getElementById('homeName').value;
         state.away.name = document.getElementById('awayName').value;
         state.server = document.getElementById('firstServer').value;
 
-        // Parsing Home
-        const parseHome = () => {
-            const list = document.getElementById('homeRosterList').children;
-            let roster=[], starters=[];
+        // 2. Parser Effectifs
+        const parse = (team) => {
+            const list = document.getElementById(team+'RosterList').children;
+            let roster = [], starters = [];
             for(let i=0; i<list.length; i++) {
-                let num = document.getElementById(`home_num_${i}`).value;
-                let name = document.getElementById(`home_name_${i}`).value;
-                let role = document.getElementById(`home_role_${i}`).value;
+                let num = document.getElementById(`${team}_num_${i}`).value;
+                let name = document.getElementById(`${team}_name_${i}`) ? document.getElementById(`${team}_name_${i}`).value : 'Adv#'+num;
+                let role = document.getElementById(`${team}_role_${i}`) ? document.getElementById(`${team}_role_${i}`).value : '?';
+                
                 if(num) {
-                    let p = {num, name: name||'J'+num, role, id:i};
+                    let p = { num, name: name || 'J'+num, role, id: i };
                     roster.push(p);
-                    if(i<6) starters.push(p);
+                    if(i < 6) starters.push(p);
                 }
             }
-            while(starters.length<6) starters.push({num:'?', name:'?'});
-            return {all:roster, court:starters};
+            while(starters.length < 6) starters.push({num:'?', name:'?', role:'?'});
+            return { all: roster, court: starters };
         };
 
-        // Parsing Away (Simplifié)
-        const parseAway = () => {
-            const list = document.getElementById('awayRosterList').children;
-            let roster=[], starters=[];
-            for(let i=0; i<list.length; i++) {
-                let num = document.getElementById(`away_num_${i}`).value;
-                // Pas de nom, pas de role
-                if(num) {
-                    let p = {num, name: 'Adv#'+num, role:'?', id:i};
-                    roster.push(p);
-                    if(i<6) starters.push(p);
-                }
-            }
-            while(starters.length<6) starters.push({num:'?', name:'?'});
-            return {all:roster, court:starters};
-        };
+        const h = parse('home'); state.home.players = h.all; state.home.onCourt = h.court;
+        const a = parse('away'); state.away.players = a.all; state.away.onCourt = a.court;
 
-        const h = parseHome(); state.home.players = h.all; state.home.onCourt = h.court;
-        const a = parseAway(); state.away.players = a.all; state.away.onCourt = a.court;
-
-        refreshGameUI();
+        // 3. Afficher Interface
+        updateUI();
         document.getElementById('setupModal').classList.add('hidden');
         document.getElementById('gameUI').style.display = 'block';
     }
 
-    function refreshGameUI() {
-        document.getElementById('lblHome').innerText = state.home.name;
-        document.getElementById('lblAway').innerText = state.away.name;
-        document.getElementById('matchVersus').innerText = `${state.home.name} vs ${state.away.name}`;
-        document.getElementById('setNum').innerText = state.set;
-        document.getElementById('gSetHome').innerText = state.home.sets;
-        document.getElementById('gSetAway').innerText = state.away.sets;
-        renderCourt();
-    }
-
-    // --- FIN DE SET & BACKUP ---
-    function endSet() {
-        if(!confirm("Fin du set confirmée ? (Une sauvegarde sera téléchargée)")) return;
-
-        // 1. Mise à jour Sets
-        if(state.home.score > state.away.score) state.home.sets++;
-        else state.away.sets++;
-
-        // 2. Auto-Download Backup (JSON)
-        downloadBackupJSON(); 
-
-        // 3. Reset Score
-        state.set++;
-        state.home.score = 0;
-        state.away.score = 0;
-
-        refreshGameUI();
-    }
-
-    function resetMatch() {
-        if(confirm("Voulez-vous vraiment effacer tout le match et recommencer ?")) {
-            location.reload();
-        }
-    }
-
-    // --- SAUVEGARDE & CHARGEMENT (JSON) ---
-    function downloadBackupJSON() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
-        const downloadAnchorNode = document.createElement('a');
-        downloadAnchorNode.setAttribute("href", dataStr);
-        downloadAnchorNode.setAttribute("download", `BACKUP_${state.home.name}_vs_${state.away.name}_Set${state.set}.json`);
-        document.body.appendChild(downloadAnchorNode);
-        downloadAnchorNode.click();
-        downloadAnchorNode.remove();
-    }
-
-    function loadGameFromFile(input) {
-        const file = input.files[0];
-        if(!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const loadedState = JSON.parse(e.target.result);
-                // Restaurer l'état
-                state = loadedState;
-                
-                // Mettre à jour l'interface
-                refreshGameUI();
-                document.getElementById('setupModal').classList.add('hidden');
-                document.getElementById('gameUI').style.display = 'block';
-                alert("Partie chargée avec succès !");
-            } catch(err) {
-                alert("Erreur lors du chargement du fichier : " + err);
-            }
-        };
-        reader.readAsText(file);
-    }
-
-    // --- SCORING (Inchangé mais nécessaire) ---
+    // --- MOTEUR DE JEU (ROTATIONS & POINTS) ---
     function openScoreModal(winner) {
         state.tempPoint = { winner, actorTeam: null, actorNum: null };
-        const loser = winner==='home'?'away':'home';
-        document.getElementById('scoreTitle').innerText = `Point ${state[winner].name}`;
+        const loser = winner === 'home' ? 'away' : 'home';
         
+        document.getElementById('scoreTitle').innerText = `Point pour ${state[winner].name}`;
         document.getElementById('actionsWinner').classList.add('hidden');
         document.getElementById('actionsLoser').classList.add('hidden');
-
-        genGrid('gridWinners', winner, true);
-        genGrid('gridLosers', loser, false);
+        
+        // Remplir les grilles
+        fillGrid('gridWinners', winner, true);
+        fillGrid('gridLosers', loser, false);
+        
         document.getElementById('scoreModal').classList.remove('hidden');
     }
 
-    function genGrid(id, team, isPos) {
-        const div = document.getElementById(id); div.innerHTML='';
+    function fillGrid(elemId, team, isPositive) {
+        const div = document.getElementById(elemId); div.innerHTML = '';
         state[team].onCourt.forEach(p => {
-            let b = document.createElement('div');
-            b.className = 'player-btn'; b.innerText = p.num;
-            b.onclick = () => {
-                document.querySelectorAll('.player-btn').forEach(x=>x.classList.remove('selected'));
-                b.classList.add('selected');
+            let btn = document.createElement('div');
+            btn.className = 'sel-btn';
+            btn.innerText = p.num;
+            btn.onclick = () => {
+                document.querySelectorAll('.sel-btn').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
                 state.tempPoint.actorTeam = team; state.tempPoint.actorNum = p.num;
-                document.getElementById(isPos?'actionsWinner':'actionsLoser').classList.remove('hidden');
-                document.getElementById(isPos?'actionsLoser':'actionsWinner').classList.add('hidden');
+                document.getElementById(isPositive ? 'actionsWinner' : 'actionsLoser').classList.remove('hidden');
+                document.getElementById(isPositive ? 'actionsLoser' : 'actionsWinner').classList.add('hidden');
             };
-            div.appendChild(b);
+            div.appendChild(btn);
         });
     }
 
     function finalizeScore(action) {
         const { winner, actorTeam, actorNum } = state.tempPoint;
+        
+        // Sauvegarder contexte avant modif
         const servT = state.server;
         const servNum = state[servT].onCourt[0].num;
         const rotH = state.home.onCourt.map(p=>p.num).join('-');
         const rotA = state.away.onCourt.map(p=>p.num).join('-');
 
+        // Score +1
         state[winner].score++;
-        
+
+        // Historique
         state.history.push({
             set: state.set,
             score_dom: state.home.score, score_ext: state.away.score,
             winner_team: state[winner].name,
-            point_type: (actorTeam===winner)?'Gagnant':'Faute',
+            point_type: (actorTeam === winner) ? 'Gagnant' : 'Faute',
             action: action,
             actor_num: actorNum, actor_team: state[actorTeam].name,
             server_team: state[servT].name, server_num: servNum,
             rot_home: rotH, rot_away: rotA
         });
 
+        // Rotation (Sideout)
         if(state.server !== winner) {
             let mover = state[winner].onCourt.shift();
             state[winner].onCourt.push(mover);
             state.server = winner;
         }
 
-        document.getElementById('scoreModal').classList.add('hidden');
-        renderCourt();
+        closeModal('scoreModal');
+        updateUI();
     }
-    
-    function closeScoreModal() { document.getElementById('scoreModal').classList.add('hidden'); }
 
-    // --- SUB & RENDER ---
+    // --- CHANGEMENTS & FIN DE SET ---
     function openSub(team, idx) {
-        state.subTarget = {team, idx};
-        const sel = document.getElementById('subInSelect'); sel.innerHTML='';
-        const current = state[team].onCourt.map(p=>p.num);
+        state.subTarget = { team, idx };
+        const sel = document.getElementById('subInSelect'); sel.innerHTML = '';
+        const currentIds = state[team].onCourt.map(p => p.num);
+        
         state[team].players.forEach(p => {
-            if(!current.includes(p.num)) {
-                let o = document.createElement('option'); o.value=p.num; o.innerText=`#${p.num} ${p.name}`;
-                sel.appendChild(o);
+            if(!currentIds.includes(p.num)) {
+                let opt = document.createElement('option');
+                opt.value = p.num; opt.innerText = `#${p.num} ${p.name}`;
+                sel.appendChild(opt);
             }
         });
         document.getElementById('subOutName').innerText = state[team].onCourt[idx].name;
         document.getElementById('subModal').classList.remove('hidden');
     }
-    function confirmSub() {
-        const {team, idx} = state.subTarget;
-        const val = document.getElementById('subInSelect').value;
-        state[team].onCourt[idx] = state[team].players.find(p=>p.num==val);
-        document.getElementById('subModal').classList.add('hidden');
-        renderCourt();
-    }
-    function closeSubModal() { document.getElementById('subModal').classList.add('hidden'); }
 
-    function renderCourt() {
+    function confirmSub() {
+        const { team, idx } = state.subTarget;
+        const val = document.getElementById('subInSelect').value;
+        state[team].onCourt[idx] = state[team].players.find(p => p.num == val);
+        closeModal('subModal');
+        updateUI();
+    }
+
+    function endSet() {
+        if(!confirm("Fin du set ? Une sauvegarde sera téléchargée.")) return;
+        
+        // Qui a gagné le set ?
+        if(state.home.score > state.away.score) state.home.sets++; else state.away.sets++;
+        
+        downloadBackup(); // Auto-save JSON
+        
+        // Reset Set
+        state.set++;
+        state.home.score = 0; state.away.score = 0;
+        updateUI();
+    }
+
+    // --- SAUVEGARDE & RESTAURATION (JSON) ---
+    function downloadBackup() {
+        const data = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+        const a = document.createElement('a');
+        a.href = data; a.download = `BACKUP_Set${state.set}_${Date.now()}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    function loadGameFromFile(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                state = JSON.parse(e.target.result);
+                updateUI();
+                document.getElementById('setupModal').classList.add('hidden');
+                document.getElementById('gameUI').style.display = 'block';
+                alert("Sauvegarde chargée avec succès !");
+            } catch(err) { alert("Erreur fichier JSON."); }
+        };
+        reader.readAsText(file);
+    }
+
+    async function sendToDB() {
+        if(!confirm("Envoyer vers la base de données (Cloud) ?")) return;
+        const payload = {
+            homeName: state.home.name, awayName: state.away.name,
+            setsHome: state.home.sets, setsAway: state.away.sets,
+            winner: state.home.sets > state.away.sets ? state.home.name : "En cours",
+            history: state.history
+        };
+        try {
+            const res = await fetch('/api/save_match', {
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            alert(json.message);
+        } catch(e) { alert("Erreur connexion Cloud : " + e); }
+    }
+
+    // --- RENDU UI ---
+    function updateUI() {
+        document.getElementById('lblHome').innerText = state.home.name;
+        document.getElementById('lblAway').innerText = state.away.name;
         document.getElementById('scoreHome').innerText = state.home.score;
         document.getElementById('scoreAway').innerText = state.away.score;
-        const draw = (t, pf) => {
-            state[t].onCourt.forEach((p, i) => {
-                const el = document.getElementById(`${pf}${i+1}`);
+        document.getElementById('gSetHome').innerText = state.home.sets;
+        document.getElementById('gSetAway').innerText = state.away.sets;
+        document.getElementById('setNum').innerText = state.set;
+        document.getElementById('matchVersus').innerText = `${state.home.name} vs ${state.away.name}`;
+
+        const draw = (team, prefix) => {
+            state[team].onCourt.forEach((p, i) => {
+                const el = document.getElementById(`${prefix}${i+1}`);
                 el.innerHTML = `<span>${p.num}</span>`;
-                if(state.server===t && i===0) el.classList.add('server');
+                if(state.server === team && i === 0) el.classList.add('server');
                 else el.classList.remove('server');
             });
         };
         draw('home', 'h_p'); draw('away', 'a_p');
     }
 
-    async function sendToDB() {
-        if(!confirm("Envoyer tout l'historique vers la base de données ?")) return;
-        const payload = {
-            homeName: state.home.name, awayName: state.away.name,
-            setsHome: state.home.sets, setsAway: state.away.sets,
-            winner: state.home.sets > state.away.sets ? state.home.name : (state.away.sets > state.home.sets ? state.away.name : "En cours"),
-            history: state.history
-        };
-        try {
-            const res = await fetch('/api/save_match', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            const json = await res.json();
-            alert(json.message);
-        } catch(e) { alert("Erreur connexion : " + e); }
-    }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+    function resetMatch() { if(confirm("Tout effacer ?")) location.reload(); }
+
 </script>
 </body>
 </html>
