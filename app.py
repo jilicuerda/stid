@@ -1,25 +1,66 @@
 import os
-from flask import Flask, render_template, request, jsonify
-from flask_cors import CORS # On l'ajoute pour être sûr
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask_cors import CORS
 from sqlalchemy import create_engine, text
+from werkzeug.security import check_password_hash # NOUVEAU : Pour vérifier le mot de passe
+from functools import wraps # NOUVEAU : Pour protéger les routes
 
 app = Flask(__name__)
-CORS(app) # Active CORS pour éviter les blocages front-end
+CORS(app)
+
+# NOUVEAU : Clé secrète indispensable pour les sessions (cookies de connexion)
+app.secret_key = os.getenv("SECRET_KEY", "une_cle_secrete_tres_longue_et_aleatoire")
 
 # --- CONFIGURATION BASE DE DONNÉES ---
-# ATTENTION : Pas de input() ici ! Juste la configuration.
-# Le serveur utilise la variable d'environnement ou votre lien "en dur".
 DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres.zuepinzkfajzlhpsmxql:2026%2FSTIDVOLL@aws-1-eu-central-1.pooler.supabase.com:6543/postgres")
-
 engine = create_engine(DB_URL)
+
+# --- NOUVEAU : DÉCORATEUR DE SÉCURITÉ ---
+# Cette fonction servira à protéger les pages
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # --- ROUTES ---
 
+# NOUVEAU : Page de Login
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        
+        with engine.connect() as conn:
+            # On cherche l'utilisateur
+            result = conn.execute(text("SELECT id, username, password_hash FROM users WHERE username = :u"), {"u": username})
+            user = result.fetchone()
+            
+            if user and check_password_hash(user[2], password):
+                session['user_id'] = user[0]
+                session['username'] = user[1]
+                return redirect(url_for('index'))
+            else:
+                return render_template('login.html', error="Identifiants invalides")
+    
+    return render_template('login.html')
+
+# NOUVEAU : Déconnexion
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required # NOUVEAU : Cette ligne protège la page d'accueil !
 def index():
     return render_template('index.html')
 
 @app.route('/api/save_match', methods=['POST'])
+@login_required # NOUVEAU : On protège aussi l'API
 def save_match():
     data = request.json
     try:
@@ -64,6 +105,5 @@ def save_match():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
-    # Ceci ne s'exécute qu'en local, Render utilise gunicorn
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
