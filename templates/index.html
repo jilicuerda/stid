@@ -1,14 +1,12 @@
 <!DOCTYPE html>
-<html class="light" lang="en">
+<html class="light" lang="fr">
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>VolleyLive Pro - Match Console</title>
     
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     
@@ -29,23 +27,12 @@
             background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
             background-size: 20px 20px;
         }
-        .net-pattern { background-image: radial-gradient(circle, #333 1px, transparent 1px); background-size: 4px 4px; }
+        .net-pattern { background-image: radial-gradient(#333 1px, transparent 1px); background-size: 4px 4px; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
         .hidden { display: none !important; }
-        
-        /* Styles des joueurs */
-        .player-circle {
-            width: 3rem; height: 3rem;
-            border-radius: 9999px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            font-weight: bold; border-width: 4px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            cursor: pointer; transition: transform 0.1s;
-        }
-        .player-circle:active { transform: scale(0.95); }
-        .server-indicator { border-color: #ef4444 !important; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3); }
     </style>
 </head>
-<body class="bg-bg-light dark:bg-bg-dark font-display text-[#111318] dark:text-white min-h-screen flex flex-col">
+<body class="bg-bg-light dark:bg-bg-dark font-display text-[#111318] dark:text-white min-h-screen flex flex-col select-none">
 
     <script>
         class VolleyMatch {
@@ -55,6 +42,7 @@
                     home: { name: "Home", score: 0, sets: 0, players: [], onCourt: [] },
                     away: { name: "Away", score: 0, sets: 0, players: [], onCourt: [] },
                     server: null, set: 1, history: [],
+                    isStarted: false,
                     tempPoint: { winner: null, actorTeam: null, actorNum: null },
                     subTarget: { team: null, idx: null }
                 };
@@ -63,7 +51,9 @@
                 this.state.home.name = hName; this.state.home.players = hRoster; this.state.home.onCourt = hCourt;
                 this.state.away.name = aName; this.state.away.players = aRoster; this.state.away.onCourt = aCourt;
                 this.state.server = serv; this.state.set = 1; this.state.history = [];
+                this.state.isStarted = false;
             }
+            startScoring() { this.state.isStarted = true; }
             scorePoint(winner, details) {
                 const sTeam = this.state.server;
                 const sNum = this.state[sTeam].onCourt[0].num;
@@ -82,44 +72,42 @@
                 const p = this.state[team].players.find(x => x.num == num);
                 if(p) this.state[team].onCourt[idx] = p;
             }
+            swapPositions(team, idx1, idx2) {
+                const temp = this.state[team].onCourt[idx1];
+                this.state[team].onCourt[idx1] = this.state[team].onCourt[idx2];
+                this.state[team].onCourt[idx2] = temp;
+            }
             endSet() {
                 (this.state.home.score > this.state.away.score) ? this.state.home.sets++ : this.state.away.sets++;
                 this.state.set++; this.state.home.score = 0; this.state.away.score = 0;
                 return true;
             }
             generateBackupJSON() { return "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state)); }
-            loadFromJSON(json) {
-                try { this.state = JSON.parse(json); return true; } catch(e) { return false; }
-            }
+            loadFromJSON(json) { try { this.state = JSON.parse(json); return true; } catch(e) { return false; } }
         }
     </script>
 
     <div id="setupModal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-3xl w-full mx-4 shadow-2xl border border-gray-700">
-            
             <div id="stepLoad" class="text-center">
                 <h2 class="text-3xl font-bold mb-6 text-primary">VolleyLive Pro</h2>
                 <div class="grid grid-cols-1 gap-4">
-                    <button onclick="showStep('step1')" class="py-4 bg-primary text-white rounded-xl font-bold hover:bg-blue-600 transition">
-                        ⭐ Nouveau Match
-                    </button>
-                    <div onclick="document.getElementById('backupInput').click()" class="py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                    <button onclick="showStep('step1')" class="py-4 bg-primary text-white rounded-xl font-bold hover:bg-blue-600 transition">⭐ Nouveau Match</button>
+                    <div onclick="document.getElementById('backupInput').click()" class="py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition">
                         <p class="font-bold">📂 Charger une Sauvegarde JSON</p>
                         <input type="file" id="backupInput" accept=".json" class="hidden" onchange="loadGameFromFile(this)">
                     </div>
                 </div>
             </div>
-
             <div id="step1" class="hidden">
                 <h3 class="text-xl font-bold mb-4">Configuration</h3>
                 <div class="space-y-4">
-                    <div><label class="text-xs font-bold text-gray-500">NOM ÉQUIPE DOMICILE (NOUS)</label><input type="text" id="homeName" value="Nous" class="w-full rounded-lg border-gray-300 p-2"></div>
-                    <div><label class="text-xs font-bold text-gray-500">NOM ÉQUIPE EXTÉRIEUR (EUX)</label><input type="text" id="awayName" value="Adversaire" class="w-full rounded-lg border-gray-300 p-2"></div>
+                    <div><label class="text-xs font-bold text-gray-500">NOUS (DOMICILE)</label><input type="text" id="homeName" value="Mon Club" class="w-full rounded-lg border-gray-300 p-2"></div>
+                    <div><label class="text-xs font-bold text-gray-500">EUX (EXTÉRIEUR)</label><input type="text" id="awayName" value="Adversaire" class="w-full rounded-lg border-gray-300 p-2"></div>
                     <div>
                         <label class="text-xs font-bold text-gray-500">PREMIER SERVICE</label>
                         <select id="firstServer" class="w-full rounded-lg border-gray-300 p-2">
-                            <option value="home">Nous servons</option>
-                            <option value="away">Eux servent</option>
+                            <option value="home">Nous servons</option><option value="away">Eux servent</option>
                         </select>
                     </div>
                 </div>
@@ -128,33 +116,29 @@
                     <button onclick="initRostersUI(); showStep('step2')" class="flex-1 py-2 bg-primary text-white rounded-lg font-bold">Suivant</button>
                 </div>
             </div>
-
             <div id="step2" class="hidden">
                 <h3 class="text-xl font-bold mb-4">Effectifs</h3>
-                
                 <div class="grid grid-cols-2 gap-6 h-80 overflow-y-auto mb-4 border rounded-lg p-4">
                     <div>
                         <div class="flex justify-between items-center mb-2">
-                            <h4 class="font-bold text-primary">Nous (Détails)</h4>
-                            <button onclick="document.getElementById('excelInput').click()" class="text-xs bg-green-600 text-white px-2 py-1 rounded flex items-center gap-1 hover:bg-green-700">
-                                <span class="material-symbols-outlined text-sm">table_view</span> Import Excel
+                            <h4 class="font-bold text-primary">Nous</h4>
+                            <button onclick="document.getElementById('excelInput').click()" class="text-[10px] bg-green-600 text-white px-2 py-1 rounded flex items-center gap-1 hover:bg-green-700">
+                                <span class="material-symbols-outlined text-sm">table_view</span> Excel
                             </button>
                             <input type="file" id="excelInput" accept=".xlsx, .xls" class="hidden" onchange="importHomeTeamFromExcel(this)">
                         </div>
                         <div id="homeRosterList" class="space-y-2"></div>
-                        <button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Ajouter Joueur</button>
+                        <button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
                     </div>
-
                     <div>
-                        <h4 class="font-bold text-gray-500 mb-2">Eux (Numéros)</h4>
+                        <h4 class="font-bold text-gray-500 mb-2">Eux</h4>
                         <div id="awayRosterList" class="space-y-2"></div>
-                        <button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Ajouter Joueur</button>
+                        <button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
                     </div>
                 </div>
-
                 <div class="flex gap-3">
                     <button onclick="showStep('step1')" class="px-4 py-3 bg-gray-200 rounded-xl font-bold">Retour</button>
-                    <button onclick="startGame()" class="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg">🚀 LANCER LE MATCH</button>
+                    <button onclick="prepareMatch()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition">🏐 PRÉPARER LE TERRAIN</button>
                 </div>
             </div>
         </div>
@@ -165,30 +149,30 @@
             <h3 id="scoreTitle" class="text-center font-bold text-2xl mb-4 border-b pb-2">Point...</h3>
             <div class="overflow-y-auto flex-1">
                 <div id="secWinner" class="mb-4">
-                    <h4 class="text-green-600 font-bold text-xs uppercase mb-2">1. Point Gagnant (Action Positive)</h4>
+                    <h4 class="text-green-600 font-bold text-xs uppercase mb-2">1. Action Positive</h4>
                     <div id="gridWinners" class="grid grid-cols-6 gap-2 mb-2"></div>
                     <div id="actionsWinner" class="hidden grid grid-cols-2 gap-2">
-                        <button onclick="finalizeScore('Attaque')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Attaque</button>
-                        <button onclick="finalizeScore('Block')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Block</button>
-                        <button onclick="finalizeScore('Ace')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Ace</button>
-                        <button onclick="finalizeScore('Feinte')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Feinte</button>
+                        <button onclick="finalizeScore('Attaque')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded hover:bg-green-100">Attaque</button>
+                        <button onclick="finalizeScore('Block')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded hover:bg-green-100">Block</button>
+                        <button onclick="finalizeScore('Ace')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded hover:bg-green-100">Ace</button>
+                        <button onclick="finalizeScore('Feinte')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded hover:bg-green-100">Feinte</button>
                     </div>
                 </div>
                 <div id="secLoser" class="mb-4">
                     <h4 class="text-red-500 font-bold text-xs uppercase mb-2">2. Faute Adverse</h4>
                     <div id="gridLosers" class="grid grid-cols-6 gap-2 mb-2"></div>
                     <div id="actionsLoser" class="hidden grid grid-cols-2 gap-2">
-                        <button onclick="finalizeScore('Attaque Out')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Attaque Out</button>
-                        <button onclick="finalizeScore('Faute Filet')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Filet</button>
-                        <button onclick="finalizeScore('Faute Service')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Service Raté</button>
-                        <button onclick="finalizeScore('Faute Main')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Faute Main</button>
+                        <button onclick="finalizeScore('Attaque Out')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded hover:bg-red-100">Attaque Out</button>
+                        <button onclick="finalizeScore('Faute Filet')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded hover:bg-red-100">Filet</button>
+                        <button onclick="finalizeScore('Faute Service')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded hover:bg-red-100">Service Raté</button>
+                        <button onclick="finalizeScore('Faute Main')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded hover:bg-red-100">Faute Main</button>
                     </div>
                 </div>
             </div>
             <button onclick="document.getElementById('scoreModal').classList.add('hidden')" class="py-3 bg-gray-200 font-bold rounded-xl mt-2">Annuler</button>
         </div>
     </div>
-
+    
     <div id="subModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center">
         <div class="bg-white p-6 rounded-xl w-80 text-center">
             <h3 class="font-bold text-xl mb-2">Changement</h3>
@@ -201,89 +185,102 @@
         </div>
     </div>
 
-    <header class="bg-white dark:bg-bg-dark/50 border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md">
+
+    <header class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
         <div class="flex items-center gap-3">
             <div class="p-2 bg-primary/10 rounded-lg text-primary"><span class="material-symbols-outlined block">sports_volleyball</span></div>
             <div>
                 <h1 id="matchVersus" class="text-lg font-bold leading-tight">Match</h1>
                 <div class="flex items-center gap-2">
                     <span class="text-xs font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded uppercase">Set <span id="setNum">1</span></span>
-                    <span class="text-xs font-medium text-gray-500 uppercase">Sets: <span id="gSetHome">0</span> - <span id="gSetAway">0</span></span>
+                    <span class="text-xs font-medium text-gray-500 uppercase">Sets: <span id="gSetLeft">0</span> - <span id="gSetRight">0</span></span>
                 </div>
             </div>
         </div>
         <div class="flex items-center gap-2">
+            <button onclick="switchSides()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-bold hover:bg-gray-200 border border-gray-300">
+                <span class="material-symbols-outlined text-sm">swap_horiz</span> <span class="hidden sm:inline">Changer Côté</span>
+            </button>
             <button onclick="downloadBackup()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-semibold hover:bg-gray-50">
-                <span class="material-symbols-outlined text-sm">save</span> <span class="hidden sm:inline">Backup</span>
+                <span class="material-symbols-outlined text-sm">save</span>
             </button>
             <button onclick="sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 shadow-sm">
-                <span class="material-symbols-outlined text-sm">cloud_upload</span> <span class="hidden sm:inline">Sync</span>
+                <span class="material-symbols-outlined text-sm">cloud_upload</span>
             </button>
-            <a href="/logout" class="ml-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-100 transition-colors">
-                <span class="material-symbols-outlined text-sm">logout</span>
-            </a>
         </div>
-        
     </header>
 
-    <main class="flex-1 flex flex-col max-w-5xl mx-auto w-full p-4 gap-4" id="gameUI" style="display:none;">
-        <div class="grid grid-cols-2 gap-4">
-            <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
-                <p id="lblHome" class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Nous</p>
-                <p id="scoreHome" class="text-7xl font-bold tracking-tighter text-primary">0</p>
+    <main class="flex-1 flex flex-col max-w-6xl mx-auto w-full p-4 gap-4" id="gameUI" style="display:none;">
+        
+        <div class="grid grid-cols-2 gap-4" id="scoreBoardContainer">
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex flex-col items-center justify-center">
+                <p id="lblLeft" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Gauche</p>
+                <p id="scoreLeft" class="text-7xl font-bold tracking-tighter text-gray-800">0</p>
             </div>
-            <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
-                <p id="lblAway" class="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Eux</p>
-                <p id="scoreAway" class="text-7xl font-bold tracking-tighter text-gray-800">0</p>
-            </div>
-        </div>
-
-        <div class="flex items-center justify-between px-2">
-            <h4 class="text-[#616f89] text-xs font-bold uppercase">Terrain</h4>
-            <div class="flex items-center gap-2"><span class="size-2 rounded-full bg-red-500 animate-pulse"></span><span class="text-xs font-bold text-gray-500 uppercase">Live</span></div>
-        </div>
-
-        <div class="relative w-full aspect-[4/3] max-h-[450px] court-wood rounded-xl border-[6px] border-white shadow-lg overflow-hidden flex flex-col">
-            <div class="flex-1 border-b-[3px] border-white/80 relative" id="cAway">
-                <div class="absolute bottom-0 w-full h-1 bg-transparent z-0"></div>
-                <div onclick="openSub('away', 0)" class="absolute top-[20%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="a_p1" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
-                <div onclick="openSub('away', 5)" class="absolute top-[20%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="a_p6" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
-                <div onclick="openSub('away', 4)" class="absolute top-[20%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="a_p5" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
-                <div onclick="openSub('away', 1)" class="absolute top-[70%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="a_p2" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
-                <div onclick="openSub('away', 2)" class="absolute top-[70%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="a_p3" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
-                <div onclick="openSub('away', 3)" class="absolute top-[70%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="a_p4" class="player-circle bg-white text-gray-800 border-gray-200">?</div></div>
-            </div>
-            <div class="h-4 bg-gray-900/10 backdrop-blur-[1px] net-pattern relative z-10 flex items-center justify-center"><div class="h-0.5 w-full bg-white/50"></div></div>
-            <div class="flex-1 relative" id="cHome">
-                <div onclick="openSub('home', 3)" class="absolute top-[30%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="h_p4" class="player-circle bg-primary text-white border-white">?</div></div>
-                <div onclick="openSub('home', 2)" class="absolute top-[30%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="h_p3" class="player-circle bg-primary text-white border-white">?</div></div>
-                <div onclick="openSub('home', 1)" class="absolute top-[30%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="h_p2" class="player-circle bg-primary text-white border-white">?</div></div>
-                <div onclick="openSub('home', 4)" class="absolute top-[80%] left-[20%] -translate-x-1/2 -translate-y-1/2"><div id="h_p5" class="player-circle bg-primary text-white border-white">?</div></div>
-                <div onclick="openSub('home', 5)" class="absolute top-[80%] left-[50%] -translate-x-1/2 -translate-y-1/2"><div id="h_p6" class="player-circle bg-primary text-white border-white">?</div></div>
-                <div onclick="openSub('home', 0)" class="absolute top-[80%] left-[80%] -translate-x-1/2 -translate-y-1/2"><div id="h_p1" class="player-circle bg-primary text-white border-white">?</div></div>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex flex-col items-center justify-center">
+                <p id="lblRight" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Droite</p>
+                <p id="scoreRight" class="text-7xl font-bold tracking-tighter text-gray-800">0</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-40 overflow-y-auto">
-                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><span class="material-symbols-outlined text-sm">list_alt</span> Historique</p>
-                <div id="historyLog" class="space-y-2 text-sm"></div>
+        <div id="preMatchBanner" class="bg-blue-50 border-2 border-blue-400 rounded-xl p-4 text-center shadow-md animate-pulse">
+            <h3 class="font-bold text-blue-800 mb-1">Phase de Placement</h3>
+            <p class="text-sm text-blue-600 mb-4">Touchez un joueur, puis un autre de son équipe pour inverser leurs positions.</p>
+            <button onclick="startActualMatch()" class="bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-green-700 transition transform hover:scale-105">
+                ▶️ DÉBUTER LE MATCH
+            </button>
+        </div>
+
+        <div class="relative w-full aspect-[2/1] max-h-[450px] court-wood rounded-xl border-[8px] border-white shadow-lg overflow-hidden flex flex-row">
+            <div class="flex-1 relative border-r-[4px] border-white/80" id="courtLeft"></div>
+
+            <div class="w-4 h-full bg-gray-900/10 backdrop-blur-[1px] net-pattern relative z-0 flex items-center justify-center shadow-inner">
+                <div class="w-1 h-full bg-white/70"></div>
+            </div>
+
+            <div class="flex-1 relative" id="courtRight"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-32 overflow-y-auto">
+                <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2"><span class="material-symbols-outlined text-sm align-middle">list_alt</span> Historique</p>
+                <div id="historyLog" class="space-y-1 text-sm"></div>
             </div>
             <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex flex-col justify-center">
-                <button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg text-sm font-bold hover:bg-red-100 transition-colors uppercase tracking-widest">🏁 Fin du Set (Sauvegarder)</button>
+                <button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg font-bold hover:bg-red-200 transition uppercase tracking-widest">
+                    🏁 Fin du Set (Auto-Save)
+                </button>
             </div>
         </div>
     </main>
 
-    <div class="bg-white border-t border-gray-200 p-4 sticky bottom-0 z-50">
-        <div class="max-w-5xl mx-auto grid grid-cols-2 gap-4">
-            <button onclick="openScoreModal('home')" class="flex flex-col items-center justify-center py-4 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform"><span class="material-symbols-outlined text-3xl mb-1">add_circle</span><span class="text-sm font-bold uppercase">+ Point Nous</span></button>
-            <button onclick="openScoreModal('away')" class="flex flex-col items-center justify-center py-4 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform"><span class="material-symbols-outlined text-3xl mb-1">add_circle</span><span class="text-sm font-bold uppercase">+ Point Eux</span></button>
+    <div id="scoringControls" class="hidden bg-white border-t border-gray-200 p-4 sticky bottom-0 z-50">
+        <div class="max-w-6xl mx-auto grid grid-cols-2 gap-4">
+            <button id="btnPointLeft" onclick="scoreFromSide('left')" class="flex flex-col items-center justify-center py-5 rounded-xl text-white shadow-lg active:scale-95 transition-transform">
+                <span class="material-symbols-outlined text-3xl mb-1">add_circle</span>
+                <span id="txtPointLeft" class="text-sm font-bold uppercase tracking-widest">+ Point Gauche</span>
+            </button>
+            <button id="btnPointRight" onclick="scoreFromSide('right')" class="flex flex-col items-center justify-center py-5 rounded-xl text-white shadow-lg active:scale-95 transition-transform">
+                <span class="material-symbols-outlined text-3xl mb-1">add_circle</span>
+                <span id="txtPointRight" class="text-sm font-bold uppercase tracking-widest">+ Point Droite</span>
+            </button>
         </div>
     </div>
 
     <script>
         let game = new VolleyMatch();
+        let isHomeLeft = true; 
+        let swapSelection = null; 
+
+        // Coordonnées pour un terrain Horizontal
+        const POS_LEFT = [
+            { x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' },
+            { x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }
+        ];
+        const POS_RIGHT = [
+            { x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' },
+            { x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }
+        ];
 
         function showStep(id) {
             ['stepLoad', 'step1', 'step2'].forEach(s => document.getElementById(s).classList.add('hidden'));
@@ -292,47 +289,21 @@
 
         // --- IMPORT EXCEL ---
         function importHomeTeamFromExcel(input) {
-            const file = input.files[0];
-            if(!file) return;
-
+            const file = input.files[0]; if(!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, {type: 'array'});
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                
-                // On récupère les données ligne par ligne (Array of Arrays)
-                const rows = XLSX.utils.sheet_to_json(worksheet, {header: 1});
-
-                // Vider la liste actuelle
-                const container = document.getElementById('homeRosterList');
-                container.innerHTML = "";
-
-                // Parcourir les lignes (On saute la ligne 0 si c'est les titres)
+                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
+                document.getElementById('homeRosterList').innerHTML = "";
                 let count = 0;
-                rows.forEach((row, index) => {
-                    // Structure attendue : COL 0=Nom, 1=Prénom, 2=Num, 3=Rôle
-                    // On vérifie s'il y a un numéro (Colonne 2) pour savoir si c'est un joueur
+                rows.forEach(row => {
                     const num = row[2];
-                    
                     if (num && !isNaN(num)) {
-                        addPlayerRow('home', count); // Créer les inputs vides
-                        
-                        // Remplir les inputs
-                        const nom = row[0] || "";
-                        const prenom = row[1] || "";
-                        const role = row[3] || "?";
-
+                        addPlayerRow('home', count);
                         document.getElementById(`home_num_${count}`).value = num;
-                        document.getElementById(`home_name_${count}`).value = `${prenom} ${nom}`; // Format : Prénom Nom
-                        
-                        // Essayer de mapper le rôle
-                        const roleSelect = document.getElementById(`home_role_${count}`);
-                        // Si le texte du rôle correspond à une option, le navigateur le sélectionnera
-                        // Sinon on essaie de deviner ou on laisse ?
-                        roleSelect.value = mapExcelRole(role);
-                        
+                        document.getElementById(`home_name_${count}`).value = `${row[1]||''} ${row[0]||''}`.trim();
+                        document.getElementById(`home_role_${count}`).value = mapExcelRole(row[3]);
                         count++;
                     }
                 });
@@ -341,10 +312,8 @@
             reader.readAsArrayBuffer(file);
         }
 
-        function mapExcelRole(roleText) {
-            // Petite aide pour convertir les rôles Excel vers les codes App
-            if(!roleText) return "?";
-            const r = roleText.toString().toUpperCase();
+        function mapExcelRole(rText) {
+            if(!rText) return "?"; const r = rText.toString().toUpperCase();
             if(r.includes("POINT") || r.includes("RECEP") || r === "OH") return "OH";
             if(r.includes("CENTRAL") || r === "MB") return "MB";
             if(r.includes("PASS") || r === "S") return "S";
@@ -359,22 +328,20 @@
         }
 
         function addPlayerRow(team, idx) {
-            const container = document.getElementById(team + 'RosterList');
-            const div = document.createElement('div');
-            div.className = "flex gap-2 items-center mb-2";
-            let html = `<span class="text-xs font-bold w-6 text-gray-400">#${idx+1}</span>
-                        <input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-14 p-2 text-sm border rounded bg-gray-50">`;
+            const c = document.getElementById(team + 'RosterList');
+            const d = document.createElement('div'); d.className = "flex gap-2 items-center mb-2";
+            let html = `<span class="text-[10px] font-bold w-4 text-gray-400">${idx+1}</span>
+                        <input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-12 p-1 text-sm border rounded">`;
             if(team === 'home') {
-                html += `<input type="text" id="${team}_name_${idx}" placeholder="Nom" class="flex-1 p-2 text-sm border rounded bg-gray-50">
-                         <select id="${team}_role_${idx}" class="p-2 text-sm border rounded w-20 bg-gray-50">
+                html += `<input type="text" id="${team}_name_${idx}" placeholder="Nom" class="flex-1 p-1 text-sm border rounded">
+                         <select id="${team}_role_${idx}" class="p-1 text-sm border rounded w-16">
                             <option value="?">?</option><option value="OH">R4</option><option value="MB">C</option><option value="S">P</option><option value="OPP">Pt</option><option value="L">L</option>
                          </select>`;
             }
-            div.innerHTML = html;
-            container.appendChild(div);
+            d.innerHTML = html; c.appendChild(d);
         }
 
-        function startGame() {
+        function prepareMatch() {
             const hName = document.getElementById('homeName').value;
             const aName = document.getElementById('awayName').value;
             const server = document.getElementById('firstServer').value;
@@ -398,43 +365,117 @@
                 return { all: roster, court: starters };
             };
 
-            const h = parse('home'); const a = parse('away');
-            game.initializeMatch(hName, aName, server, h.all, h.court, a.all, a.court);
+            game.initializeMatch(hName, aName, server, parse('home').all, parse('home').court, parse('away').all, parse('away').court);
+            isHomeLeft = true; 
+            
             document.getElementById('setupModal').classList.add('hidden');
             document.getElementById('gameUI').style.display = 'flex';
+            
+            document.getElementById('preMatchBanner').classList.remove('hidden');
+            document.getElementById('scoringControls').classList.add('hidden');
+            
             updateScreen();
+        }
+
+        function startActualMatch() {
+            game.startScoring();
+            document.getElementById('preMatchBanner').classList.add('hidden');
+            document.getElementById('scoringControls').classList.remove('hidden');
+            swapSelection = null;
+            updateScreen();
+        }
+
+        function switchSides() {
+            isHomeLeft = !isHomeLeft;
+            updateScreen();
+        }
+
+        function handlePlayerClick(team, idx) {
+            if (game.state.isStarted) {
+                // Match en cours : Changement (Substitution)
+                openSub(team, idx);
+            } else {
+                // Pré-match : Inversion de position (Tap to Swap)
+                if (!swapSelection) {
+                    swapSelection = { team, idx };
+                    updateScreen();
+                } else {
+                    if (swapSelection.team === team) {
+                        game.swapPositions(team, swapSelection.idx, idx);
+                    }
+                    swapSelection = null;
+                    updateScreen();
+                }
+            }
         }
 
         function updateScreen() {
             const s = game.state;
-            document.getElementById('lblHome').innerText = s.home.name;
-            document.getElementById('lblAway').innerText = s.away.name;
-            document.getElementById('scoreHome').innerText = s.home.score;
-            document.getElementById('scoreAway').innerText = s.away.score;
+            const teamLeft = isHomeLeft ? 'home' : 'away';
+            const teamRight = isHomeLeft ? 'away' : 'home';
+
+            // Mise à jour Scoreboard
+            document.getElementById('lblLeft').innerText = s[teamLeft].name;
+            document.getElementById('scoreLeft').innerText = s[teamLeft].score;
+            document.getElementById('txtPointLeft').innerText = "+ Point " + s[teamLeft].name;
+            document.getElementById('btnPointLeft').className = (teamLeft === 'home') 
+                ? "flex flex-col items-center justify-center py-5 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform"
+                : "flex flex-col items-center justify-center py-5 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform";
+
+            document.getElementById('lblRight').innerText = s[teamRight].name;
+            document.getElementById('scoreRight').innerText = s[teamRight].score;
+            document.getElementById('txtPointRight').innerText = "+ Point " + s[teamRight].name;
+            document.getElementById('btnPointRight').className = (teamRight === 'home') 
+                ? "flex flex-col items-center justify-center py-5 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform"
+                : "flex flex-col items-center justify-center py-5 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform";
+
+            document.getElementById('gSetLeft').innerText = s[teamLeft].sets;
+            document.getElementById('gSetRight').innerText = s[teamRight].sets;
             document.getElementById('setNum').innerText = s.set;
-            document.getElementById('gSetHome').innerText = s.home.sets;
-            document.getElementById('gSetAway').innerText = s.away.sets;
             document.getElementById('matchVersus').innerText = `${s.home.name} vs ${s.away.name}`;
 
-            const draw = (team, prefix) => {
+            // Rendu Terrain
+            const renderHalf = (team, containerId, positionsMap) => {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+
                 s[team].onCourt.forEach((p, i) => {
-                    const el = document.getElementById(`${prefix}${i+1}`);
-                    if(el) {
-                        el.innerHTML = `<span class="text-xl">${p.num}</span><span class="text-[9px] uppercase mt-[-4px]">${p.role || ''}</span>`;
-                        if(s.server === team && i === 0) el.classList.add('server-indicator');
-                        else el.classList.remove('server-indicator');
-                    }
+                    const pos = positionsMap[i];
+                    const isServer = (s.server === team && i === 0);
+                    const isSelected = (swapSelection && swapSelection.team === team && swapSelection.idx === i);
+                    
+                    let colorClass = (team === 'home') ? 'bg-primary text-white border-white' : 'bg-white text-gray-800 border-gray-300';
+                    if (isSelected) colorClass = 'bg-yellow-300 border-yellow-500 text-yellow-900 scale-110 z-20';
+                    let serverClass = isServer ? 'ring-4 ring-red-500 border-red-500' : '';
+
+                    container.innerHTML += `
+                        <div onclick="handlePlayerClick('${team}', ${i})"
+                             class="absolute flex flex-col items-center justify-center font-bold border-4 shadow-lg cursor-pointer transition-all transform -translate-x-1/2 -translate-y-1/2 ${colorClass} ${serverClass}"
+                             style="left: ${pos.x}; top: ${pos.y}; width: 3.5rem; height: 3.5rem; border-radius: 9999px;">
+                            <span class="text-xl leading-none">${p.num}</span>
+                            <span class="text-[9px] uppercase">${p.role || ''}</span>
+                        </div>
+                    `;
                 });
             };
-            draw('home', 'h_p'); draw('away', 'a_p');
 
+            renderHalf(teamLeft, 'courtLeft', POS_LEFT);
+            renderHalf(teamRight, 'courtRight', POS_RIGHT);
+
+            // Historique
             const logDiv = document.getElementById('historyLog');
-            logDiv.innerHTML = s.history.slice(-3).reverse().map(h => `
+            logDiv.innerHTML = s.history.slice(-4).reverse().map(h => `
                 <div class="flex justify-between items-center border-b pb-1">
                     <span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span>
                     <span class="text-xs bg-gray-100 px-2 rounded">${h.action} (${h.actor_num})</span>
                 </div>
             `).join('');
+        }
+
+        // --- SCORING ---
+        function scoreFromSide(side) {
+            const winner = (side === 'left') ? (isHomeLeft ? 'home' : 'away') : (isHomeLeft ? 'away' : 'home');
+            openScoreModal(winner);
         }
 
         function openScoreModal(winner) {
@@ -452,7 +493,7 @@
             const div = document.getElementById(elemId); div.innerHTML = '';
             game.state[team].onCourt.forEach(p => {
                 let btn = document.createElement('button');
-                btn.className = "h-10 w-10 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition shadow-sm";
+                btn.className = "h-12 w-12 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition shadow-sm text-lg";
                 btn.innerText = p.num;
                 btn.onclick = () => {
                     Array.from(div.children).forEach(c => c.classList.remove('bg-primary', 'text-white'));
@@ -471,6 +512,7 @@
             updateScreen();
         }
 
+        // --- SUBSTITUTIONS ---
         function openSub(team, idx) {
             game.state.subTarget = { team, idx };
             const sel = document.getElementById('subInSelect'); sel.innerHTML = '';
@@ -490,10 +532,21 @@
             updateScreen();
         }
 
-        function endSet() { if(game.endSet()) { downloadBackup(); updateScreen(); } }
+        // --- GLOBAL ---
+        function endSet() { 
+            if(confirm("Confirmer la fin du set ?")) {
+                if(game.endSet()) { 
+                    downloadBackup(); 
+                    switchSides(); // Automatiquement changer de côté après le set
+                    updateScreen(); 
+                } 
+            }
+        }
+        
         function downloadBackup() {
             const a = document.createElement('a'); a.href = game.generateBackupJSON(); a.download = `VOLLEY_BACKUP_${Date.now()}.json`; document.body.appendChild(a); a.click(); a.remove();
         }
+        
         function loadGameFromFile(input) {
             const file = input.files[0]; if(!file) return;
             const r = new FileReader();
@@ -501,20 +554,41 @@
                 if(game.loadFromJSON(e.target.result)) {
                     document.getElementById('setupModal').classList.add('hidden');
                     document.getElementById('gameUI').style.display = 'flex';
+                    // S'assurer que les contrôles de score sont affichés
+                    document.getElementById('preMatchBanner').classList.add('hidden');
+                    document.getElementById('scoringControls').classList.remove('hidden');
                     updateScreen();
-                    alert("Partie chargée !");
                 } else alert("Fichier invalide");
             };
             r.readAsText(file);
         }
+
+        // --- ENVOI BASE DE DONNÉES ---
         async function sendToDB() {
-            if(!confirm("Synchroniser vers le Cloud ?")) return;
+            if(!confirm("Synchroniser vers la base de données (Cloud Supabase) ?")) return;
             try {
-                const res = await fetch('/api/save_match', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(game.state) });
-                const json = await res.json(); alert(json.message);
-            } catch(e) { alert("Erreur Cloud : " + e); }
+                // Construction du payload attendu par app.py
+                const payload = {
+                    homeName: game.state.home.name,
+                    awayName: game.state.away.name,
+                    setsHome: game.state.home.sets,
+                    setsAway: game.state.away.sets,
+                    winner: game.state.home.sets > game.state.away.sets ? game.state.home.name : (game.state.away.sets > game.state.home.sets ? game.state.away.name : "En cours"),
+                    history: game.state.history
+                };
+                
+                const res = await fetch('/api/save_match', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify(payload) 
+                });
+                
+                const json = await res.json(); 
+                alert(json.message);
+            } catch(e) { 
+                alert("Erreur Cloud : " + e); 
+            }
         }
     </script>
 </body>
 </html>
-
