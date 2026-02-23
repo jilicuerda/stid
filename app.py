@@ -2,21 +2,19 @@ import os
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
 from sqlalchemy import create_engine, text
-from werkzeug.security import check_password_hash # NOUVEAU : Pour vérifier le mot de passe
-from functools import wraps # NOUVEAU : Pour protéger les routes
+from werkzeug.security import check_password_hash
+from functools import wraps
 
 app = Flask(__name__)
 CORS(app)
 
-# NOUVEAU : Clé secrète indispensable pour les sessions (cookies de connexion)
 app.secret_key = os.getenv("SECRET_KEY", "une_cle_secrete_tres_longue_et_aleatoire")
 
 # --- CONFIGURATION BASE DE DONNÉES ---
 DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres.zuepinzkfajzlhpsmxql:2026%2FSTIDVOLL@aws-1-eu-central-1.pooler.supabase.com:6543/postgres")
 engine = create_engine(DB_URL)
 
-# --- NOUVEAU : DÉCORATEUR DE SÉCURITÉ ---
-# Cette fonction servira à protéger les pages
+# --- DÉCORATEURS DE SÉCURITÉ ---
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -25,9 +23,16 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- ROUTES ---
+def superadmin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session or session.get('role') != 'superadmin':
+            return "Accès refusé. Privilèges Super Admin requis.", 403
+        return f(*args, **kwargs)
+    return decorated_function
 
-# NOUVEAU : Page de Login
+# --- ROUTES D'AUTHENTIFICATION ---
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -35,50 +40,60 @@ def login():
         password = request.form['password']
         
         with engine.connect() as conn:
-            # On cherche l'utilisateur
-            result = conn.execute(text("SELECT id, username, password_hash FROM users WHERE username = :u"), {"u": username})
+            # On récupère aussi le club_id et le role
+            result = conn.execute(text("""
+                SELECT id, username, password_hash, club_id, role 
+                FROM users WHERE username = :u
+            """), {"u": username})
             user = result.fetchone()
             
             if user and check_password_hash(user[2], password):
                 session['user_id'] = user[0]
                 session['username'] = user[1]
+                session['club_id'] = user[3] # L'ID du club du coach
+                session['role'] = user[4]    # 'coach' ou 'superadmin'
                 return redirect(url_for('index'))
             else:
                 return render_template('login.html', error="Identifiants invalides")
     
     return render_template('login.html')
 
-# NOUVEAU : Déconnexion
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
 
+# --- ROUTES DE L'APPLICATION ---
+
 @app.route('/')
-@login_required # NOUVEAU : Cette ligne protège la page d'accueil !
+@login_required
 def index():
+    # Vous pourriez passer le nom du club au template si vous le souhaitez
     return render_template('index.html')
 
 @app.route('/api/save_match', methods=['POST'])
-@login_required # NOUVEAU : On protège aussi l'API
+@login_required
 def save_match():
     data = request.json
+    club_id = session.get('club_id') # On récupère le club du coach connecté
+    
     try:
         with engine.connect() as conn:
             trans = conn.begin()
             
-            # 1. Match
+            # 1. Match (Lié au club !)
             result = conn.execute(text("""
-                INSERT INTO matches (team_home, team_away, sets_home, sets_away, winner)
-                VALUES (:h, :a, :sh, :sa, :w)
+                INSERT INTO matches (club_id, team_home, team_away, sets_home, sets_away, winner)
+                VALUES (:cid, :h, :a, :sh, :sa, :w)
                 RETURNING id
             """), {
+                "cid": club_id,
                 "h": data['homeName'], "a": data['awayName'],
                 "sh": data['setsHome'], "sa": data['setsAway'], "w": data['winner']
             })
             match_id = result.fetchone()[0]
 
-            # 2. Points
+            # 2. Points (Liés au Match, qui est lui-même lié au Club)
             if data['history']:
                 points_values = []
                 for p in data['history']:
@@ -98,11 +113,20 @@ def save_match():
                 """), points_values)
             
             trans.commit()
-            return jsonify({"status": "success", "message": "Match sauvegardé !"})
+            return jsonify({"status": "success", "message": "Match sauvegardé pour votre club !"})
             
     except Exception as e:
-        print(f"Erreur: {e}")
+        print(f"Erreur SQL : {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- ROUTES D'ADMINISTRATION ---
+
+@app.route('/admin')
+@superadmin_required
+def admin_dashboard():
+    # Cette page n'est visible que par le superadmin
+    # Elle pourrait lister tous les clubs et permettre de créer de nouveaux coachs
+    return "Bienvenue dans le panneau de contrôle Super Admin. Vous pouvez voir tous les clubs ici."
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
