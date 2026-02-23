@@ -1,9 +1,14 @@
 import os
+import json
+import tempfile
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
 from sqlalchemy import create_engine, text
-from werkzeug.security import check_password_hash, generate_password_hash # Ajout de generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
+
+# Import du script de votre coéquipier
+from pdf_engine import process_pdf_for_web
 
 app = Flask(__name__)
 CORS(app)
@@ -51,7 +56,6 @@ def login():
                 session['club_id'] = user[3]
                 session['role'] = user[4]
                 
-                # Redirection intelligente selon le rôle
                 if session['role'] == 'superadmin':
                     return redirect(url_for('admin_dashboard'))
                 return redirect(url_for('index'))
@@ -65,7 +69,7 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- ROUTES DE L'APPLICATION (MATCH) ---
+# --- ROUTES DE L'APPLICATION (MATCH EN DIRECT) ---
 @app.route('/')
 @login_required
 def index():
@@ -119,15 +123,65 @@ def save_match():
         print(f"Erreur SQL : {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# --- ROUTES EXTRACTION PDF ---
+@app.route('/extraction')
+@login_required
+def extraction_page():
+    return render_template('extraction.html')
+
+@app.route('/api/upload_pdf', methods=['POST'])
+@login_required
+def upload_pdf():
+    if 'file' not in request.files:
+        return jsonify({"error": "Aucun fichier envoyé"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Fichier vide"}), 400
+
+    if file and file.filename.endswith('.pdf'):
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, file.filename)
+        file.save(temp_path)
+        
+        try:
+            result_data = process_pdf_for_web(temp_path)
+            os.remove(temp_path)
+            return jsonify({"status": "success", "data": result_data})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+            
+    return jsonify({"error": "Format invalide. PDF requis."}), 400
+
+@app.route('/api/save_pdf_report', methods=['POST'])
+@login_required
+def save_pdf_report():
+    data = request.json
+    club_id = session.get('club_id')
+    
+    try:
+        with engine.connect() as conn:
+            trans = conn.begin()
+            conn.execute(text("""
+                INSERT INTO pdf_reports (club_id, team_home, team_away, report_data)
+                VALUES (:cid, :h, :a, :rd)
+            """), {
+                "cid": club_id,
+                "h": data.get('equipe_a', 'Inconnu'),
+                "a": data.get('equipe_b', 'Inconnu'),
+                "rd": json.dumps(data)
+            })
+            trans.commit()
+            return jsonify({"status": "success", "message": "Rapport PDF sauvegardé en Base de données !"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 # --- ROUTES D'ADMINISTRATION ---
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
     with engine.connect() as conn:
-        # Récupérer tous les clubs
         clubs = conn.execute(text("SELECT id, name FROM clubs ORDER BY id")).fetchall()
-        
-        # Récupérer tous les utilisateurs avec le nom de leur club
         users = conn.execute(text("""
             SELECT u.id, u.username, u.role, c.name as club_name 
             FROM users u 
