@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Extraction PDF - VolleyLive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+</head>
+<body class="bg-gray-50">
+    <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between">
+        <h1 class="text-xl font-bold flex items-center gap-2"><span class="material-symbols-outlined">picture_as_pdf</span> Analyse PDF</h1>
+        <a href="/" class="bg-blue-800 px-4 py-2 rounded font-bold">Retour au Live</a>
+    </header>
+
+    <main class="max-w-4xl mx-auto mt-8 p-4">
+        <div class="bg-white p-8 rounded-xl shadow-sm text-center border-2 border-dashed border-gray-300">
+            <h2 class="text-xl font-bold text-gray-700 mb-4">Uploader la Feuille de Match Officielle</h2>
+            <input type="file" id="pdfInput" accept=".pdf" class="hidden" onchange="uploadPDF()">
+            <button onclick="document.getElementById('pdfInput').click()" class="bg-primary bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg">
+                Choisir un fichier PDF
+            </button>
+            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Extraction en cours par l'IA... Merci de patienter.</p>
+        </div>
+
+        <div id="resultsZone" class="mt-8 hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="matchTitle" class="text-2xl font-bold text-gray-800">Match : ... vs ...</h2>
+                <div class="flex gap-2">
+                    <button onclick="exportJSON()" class="bg-gray-800 text-white px-4 py-2 rounded-lg font-bold flex gap-2 items-center"><span class="material-symbols-outlined text-sm">download</span> Exporter JSON</button>
+                    <button onclick="saveToDB()" class="bg-green-600 text-white px-4 py-2 rounded-lg font-bold flex gap-2 items-center"><span class="material-symbols-outlined text-sm">cloud_upload</span> Sauvegarder (BDD)</button>
+                </div>
+            </div>
+
+            <div id="graphsContainer" class="grid grid-cols-1 gap-6"></div>
+        </div>
+    </main>
+
+    <script>
+        let currentExtractedData = null;
+
+        async function uploadPDF() {
+            const file = document.getElementById('pdfInput').files[0];
+            if(!file) return;
+
+            document.getElementById('loadingMsg').classList.remove('hidden');
+            document.getElementById('resultsZone').classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const response = await fetch('/api/upload_pdf', { method: 'POST', body: formData });
+                const result = await response.json();
+                
+                if(result.status === "success") {
+                    currentExtractedData = result.data;
+                    displayResults(result.data);
+                } else {
+                    alert("Erreur: " + result.error);
+                }
+            } catch(e) {
+                alert("Erreur de connexion.");
+            } finally {
+                document.getElementById('loadingMsg').classList.add('hidden');
+            }
+        }
+
+        function displayResults(data) {
+            document.getElementById('matchTitle').innerText = `Match : ${data.equipe_a} vs ${data.equipe_b}`;
+            
+            const gContainer = document.getElementById('graphsContainer');
+            gContainer.innerHTML = '';
+            
+            // Affichage des images (Graphiques Matplotlib générés en Python)
+            data.graphs.forEach(g => {
+                if(g.image_base64) {
+                    gContainer.innerHTML += `
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                            <h3 class="font-bold text-gray-500 mb-2">Graphique Set ${g.set}</h3>
+                            <img src="data:image/png;base64,${g.image_base64}" class="w-full h-auto rounded">
+                        </div>
+                    `;
+                }
+            });
+            document.getElementById('resultsZone').classList.remove('hidden');
+        }
+
+        // FONCTIONNALITÉ 1 : EXPORT
+        function exportJSON() {
+            if(!currentExtractedData) return;
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentExtractedData));
+            const a = document.createElement('a');
+            a.href = dataStr; 
+            a.download = `Extraction_${currentExtractedData.equipe_a}_vs_${currentExtractedData.equipe_b}.json`;
+            document.body.appendChild(a); a.click(); a.remove();
+        }
+
+        // FONCTIONNALITÉ 2 : BASE DE DONNÉES
+        async function saveToDB() {
+            if(!currentExtractedData) return;
+            if(!confirm("Envoyer ces résultats dans la base de données de votre club ?")) return;
+
+            try {
+                const res = await fetch('/api/save_pdf_report', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify(currentExtractedData) 
+                });
+                const json = await res.json(); 
+                alert(json.message);
+            } catch(e) { alert("Erreur d'envoi."); }
+        }
+    </script>
+</body>
+</html>
