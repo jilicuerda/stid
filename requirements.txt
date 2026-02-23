@@ -1,5 +1,11 @@
 flask
+flask-cors
 sqlalchemy
 psycopg2-binary
 gunicorn
-flask-cors
+werkzeug
+tabula-py
+pandas
+numpy
+matplotlib
+tabulate
