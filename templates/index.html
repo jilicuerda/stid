@@ -55,18 +55,18 @@
                 <h2 class="text-3xl font-bold mb-6 text-primary">VolleyLive Pro</h2>
                 <div class="grid grid-cols-1 gap-4">
                     <button onclick="showStep('step1')" class="py-4 bg-primary text-white rounded-xl font-bold hover:bg-blue-600 transition">⭐ Nouveau Match</button>
-                    <div onclick="document.getElementById('backupInput').click()" class="py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 transition"><p class="font-bold">📂 Charger Sauvegarde JSON</p><input type="file" id="backupInput" accept=".json" class="hidden" onchange="loadGameFromFile(this)"></div>
+                    <div onclick="document.getElementById('backupInput').click()" class="py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition"><p class="font-bold">📂 Charger Sauvegarde JSON</p><input type="file" id="backupInput" accept=".json" class="hidden" onchange="loadGameFromFile(this)"></div>
                 </div>
             </div>
             <div id="step1" class="hidden">
                 <h3 class="text-xl font-bold mb-4">Configuration</h3>
                 <div class="space-y-4">
-                    <div><label class="text-xs font-bold text-gray-500">NOUS (DOMICILE)</label><input type="text" id="homeName" value="Mon Club" class="w-full rounded-lg border-gray-300 p-2"></div>
-                    <div><label class="text-xs font-bold text-gray-500">EUX (EXTÉRIEUR)</label><input type="text" id="awayName" value="Adversaire" class="w-full rounded-lg border-gray-300 p-2"></div>
-                    <div><label class="text-xs font-bold text-gray-500">PREMIER SERVICE</label><select id="firstServer" class="w-full rounded-lg border-gray-300 p-2"><option value="home">Nous servons</option><option value="away">Eux servent</option></select></div>
+                    <div><label class="text-xs font-bold text-gray-500">NOUS (DOMICILE)</label><input type="text" id="homeName" value="Mon Club" class="w-full rounded-lg border-gray-300 p-2 bg-white text-gray-900 placeholder-gray-400"></div>
+                    <div><label class="text-xs font-bold text-gray-500">EUX (EXTÉRIEUR)</label><input type="text" id="awayName" value="Adversaire" class="w-full rounded-lg border-gray-300 p-2 bg-white text-gray-900 placeholder-gray-400"></div>
+                    <div><label class="text-xs font-bold text-gray-500">PREMIER SERVICE</label><select id="firstServer" class="w-full rounded-lg border-gray-300 p-2 bg-white text-gray-900"><option value="home">Nous servons</option><option value="away">Eux servent</option></select></div>
                 </div>
                 <div class="flex gap-3 mt-6">
-                    <button onclick="showStep('stepLoad')" class="px-4 py-2 bg-gray-200 rounded-lg font-bold">Retour</button>
+                    <button onclick="showStep('stepLoad')" class="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg font-bold">Retour</button>
                     <button onclick="initRostersUI(); showStep('step2')" class="flex-1 py-2 bg-primary text-white rounded-lg font-bold">Suivant</button>
                 </div>
             </div>
@@ -75,54 +75,54 @@
                 <div class="grid grid-cols-2 gap-6 h-80 overflow-y-auto mb-4 border rounded-lg p-4">
                     <div>
                         <div class="flex justify-between items-center mb-2"><h4 class="font-bold text-primary">Nous</h4><button onclick="document.getElementById('excelInput').click()" class="text-[10px] bg-green-600 text-white px-2 py-1 rounded flex items-center gap-1 hover:bg-green-700"><span class="material-symbols-outlined text-sm">table_view</span> Excel</button><input type="file" id="excelInput" accept=".xlsx, .xls" class="hidden" onchange="importHomeTeamFromExcel(this)"></div>
-                        <div id="homeRosterList" class="space-y-2"></div><button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
+                        <div id="homeRosterList" class="space-y-2"></div><button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 text-gray-900 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
                     </div>
                     <div>
                         <h4 class="font-bold text-gray-500 mb-2">Eux</h4>
-                        <div id="awayRosterList" class="space-y-2"></div><button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
+                        <div id="awayRosterList" class="space-y-2"></div><button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 text-gray-900 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
                     </div>
                 </div>
                 <div class="flex gap-3">
-                    <button onclick="showStep('step1')" class="px-4 py-3 bg-gray-200 rounded-xl font-bold">Retour</button>
-                    <button onclick="prepareMatch()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg">🏐 PRÉPARER LE TERRAIN</button>
+                    <button onclick="showStep('step1')" class="px-4 py-3 bg-gray-200 text-gray-900 rounded-xl font-bold">Retour</button>
+                    <button onclick="prepareMatch()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition">🏐 PRÉPARER LE TERRAIN</button>
                 </div>
             </div>
         </div>
     </div>
 
     <div id="scoreModal" class="hidden fixed inset-0 bg-black/90 z-[100] flex items-center justify-center">
-        <div class="bg-white rounded-2xl p-4 max-w-lg w-full mx-4 flex flex-col max-h-[90vh]">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-4 max-w-lg w-full mx-4 flex flex-col max-h-[90vh]">
             <h3 id="scoreTitle" class="text-center font-bold text-2xl mb-4 border-b pb-2">Point...</h3>
             <div class="overflow-y-auto flex-1">
                 <div id="secWinner" class="mb-4">
                     <h4 class="text-green-600 font-bold text-xs uppercase mb-2">1. Action Positive</h4>
                     <div id="gridWinners" class="grid grid-cols-6 gap-2 mb-2"></div>
                     <div id="actionsWinner" class="hidden grid grid-cols-2 gap-2">
-                        <button onclick="finalizeScore('Attaque')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Attaque</button><button onclick="finalizeScore('Block')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Block</button><button onclick="finalizeScore('Ace')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Ace</button><button onclick="finalizeScore('Feinte')" class="p-3 bg-green-50 border-l-4 border-green-500 font-bold rounded">Feinte</button>
+                        <button onclick="finalizeScore('Attaque')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Attaque</button><button onclick="finalizeScore('Block')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Block</button><button onclick="finalizeScore('Ace')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Ace</button><button onclick="finalizeScore('Feinte')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Feinte</button>
                     </div>
                 </div>
                 <div id="secLoser" class="mb-4">
                     <h4 class="text-red-500 font-bold text-xs uppercase mb-2">2. Faute Adverse</h4>
                     <div id="gridLosers" class="grid grid-cols-6 gap-2 mb-2"></div>
                     <div id="actionsLoser" class="hidden grid grid-cols-2 gap-2">
-                        <button onclick="finalizeScore('Attaque Out')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Attaque Out</button><button onclick="finalizeScore('Faute Filet')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Filet</button><button onclick="finalizeScore('Faute Service')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Service Raté</button><button onclick="finalizeScore('Faute Main')" class="p-3 bg-red-50 border-l-4 border-red-500 font-bold rounded">Faute Main</button>
+                        <button onclick="finalizeScore('Attaque Out')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Attaque Out</button><button onclick="finalizeScore('Faute Filet')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Filet</button><button onclick="finalizeScore('Faute Service')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Service Raté</button><button onclick="finalizeScore('Faute Main')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Faute Main</button>
                     </div>
                 </div>
             </div>
-            <button onclick="document.getElementById('scoreModal').classList.add('hidden')" class="py-3 bg-gray-200 font-bold rounded-xl mt-2">Annuler</button>
+            <button onclick="document.getElementById('scoreModal').classList.add('hidden')" class="py-3 bg-gray-200 text-gray-900 font-bold rounded-xl mt-2 hover:bg-gray-300">Annuler</button>
         </div>
     </div>
     
     <div id="subModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center">
-        <div class="bg-white p-6 rounded-xl w-80 text-center">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl w-80 text-center">
             <h3 class="font-bold text-xl mb-2">Changement</h3>
             <p class="text-sm text-gray-500 mb-4">Sortie : <strong id="subOutName"></strong></p>
-            <select id="subInSelect" class="w-full border p-2 rounded mb-4"></select>
-            <div class="flex gap-2"><button onclick="confirmSub()" class="flex-1 bg-primary text-white py-2 rounded font-bold">Confirmer</button><button onclick="document.getElementById('subModal').classList.add('hidden')" class="flex-1 bg-gray-200 py-2 rounded font-bold">Annuler</button></div>
+            <select id="subInSelect" class="w-full border p-2 rounded mb-4 bg-white text-gray-900"></select>
+            <div class="flex gap-2"><button onclick="confirmSub()" class="flex-1 bg-primary text-white py-2 rounded font-bold">Confirmer</button><button onclick="document.getElementById('subModal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-900 py-2 rounded font-bold">Annuler</button></div>
         </div>
     </div>
 
-    <header class="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+    <header class="bg-white dark:bg-bg-dark/50 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm backdrop-blur-md">
         <div class="flex items-center gap-3">
             <div class="p-2 bg-primary/10 rounded-lg text-primary"><span class="material-symbols-outlined block">sports_volleyball</span></div>
             <div>
@@ -147,15 +147,15 @@
                 <span class="material-symbols-outlined text-sm">document_scanner</span>
             </a>
 
-            <button onclick="switchSides()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-bold border border-gray-300"><span class="material-symbols-outlined text-sm">swap_horiz</span></button>
-            <button onclick="sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm"><span class="material-symbols-outlined text-sm">cloud_upload</span> Sync Fin</button>
+            <button onclick="switchSides()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-bold border border-gray-300 hover:bg-gray-200"><span class="material-symbols-outlined text-sm">swap_horiz</span></button>
+            <button onclick="sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm hover:bg-blue-700"><span class="material-symbols-outlined text-sm">cloud_upload</span> Sync Fin</button>
         </div>
     </header>
 
     <main class="flex-1 flex flex-col max-w-6xl mx-auto w-full p-4 gap-4" id="gameUI" style="display:none;">
         <div class="grid grid-cols-2 gap-4" id="scoreBoardContainer">
-            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex flex-col items-center justify-center"><p id="lblLeft" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Gauche</p><p id="scoreLeft" class="text-7xl font-bold tracking-tighter text-gray-800">0</p></div>
-            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-200 flex flex-col items-center justify-center"><p id="lblRight" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Droite</p><p id="scoreRight" class="text-7xl font-bold tracking-tighter text-gray-800">0</p></div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center"><p id="lblLeft" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Gauche</p><p id="scoreLeft" class="text-7xl font-bold tracking-tighter text-gray-800 dark:text-white">0</p></div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center"><p id="lblRight" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Droite</p><p id="scoreRight" class="text-7xl font-bold tracking-tighter text-gray-800 dark:text-white">0</p></div>
         </div>
 
         <div id="preMatchBanner" class="bg-blue-50 border-2 border-blue-400 rounded-xl p-4 text-center shadow-md animate-pulse">
@@ -171,12 +171,12 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 h-32 overflow-y-auto"><p class="text-[10px] font-bold text-gray-400 uppercase mb-2"><span class="material-symbols-outlined text-sm align-middle">list_alt</span> Historique</p><div id="historyLog" class="space-y-1 text-sm"></div></div>
-            <div class="bg-white rounded-xl p-4 shadow-sm flex flex-col justify-center"><button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg font-bold hover:bg-red-200 transition uppercase tracking-widest">🏁 Fin du Set (Auto-Save)</button></div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 h-32 overflow-y-auto"><p class="text-[10px] font-bold text-gray-400 uppercase mb-2"><span class="material-symbols-outlined text-sm align-middle">list_alt</span> Historique</p><div id="historyLog" class="space-y-1 text-sm"></div></div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-center"><button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg font-bold hover:bg-red-200 transition uppercase tracking-widest">🏁 Fin du Set (Auto-Save)</button></div>
         </div>
     </main>
 
-    <div id="scoringControls" class="hidden bg-white border-t border-gray-200 p-4 sticky bottom-0 z-50">
+    <div id="scoringControls" class="hidden bg-white dark:bg-bg-dark border-t border-gray-200 dark:border-gray-800 p-4 sticky bottom-0 z-50">
         <div class="max-w-6xl mx-auto grid grid-cols-2 gap-4">
             <button id="btnPointLeft" onclick="scoreFromSide('left')" class="flex flex-col items-center justify-center py-5 rounded-xl text-white shadow-lg active:scale-95 transition-transform"><span class="material-symbols-outlined text-3xl mb-1">add_circle</span><span id="txtPointLeft" class="text-sm font-bold uppercase">+ Point Gauche</span></button>
             <button id="btnPointRight" onclick="scoreFromSide('right')" class="flex flex-col items-center justify-center py-5 rounded-xl text-white shadow-lg active:scale-95 transition-transform"><span class="material-symbols-outlined text-3xl mb-1">add_circle</span><span id="txtPointRight" class="text-sm font-bold uppercase">+ Point Droite</span></button>
@@ -187,7 +187,7 @@
         let game = new VolleyMatch();
         let isHomeLeft = true; 
         let swapSelection = null; 
-        let currentLiveMatchId = null; // ID DU MATCH EN DIRECT
+        let currentLiveMatchId = null;
 
         const POS_LEFT = [{ x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }, { x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }];
         const POS_RIGHT = [{ x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }, { x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }];
@@ -229,8 +229,8 @@
 
         function addPlayerRow(team, idx) {
             const c = document.getElementById(team + 'RosterList'); const d = document.createElement('div'); d.className = "flex gap-2 items-center mb-2";
-            let html = `<span class="text-[10px] font-bold w-4 text-gray-400">${idx+1}</span><input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-12 p-1 text-sm border rounded">`;
-            if(team === 'home') html += `<input type="text" id="${team}_name_${idx}" placeholder="Nom" class="flex-1 p-1 text-sm border rounded"><select id="${team}_role_${idx}" class="p-1 text-sm border rounded w-16"><option value="?">?</option><option value="OH">R4</option><option value="MB">C</option><option value="S">P</option><option value="OPP">Pt</option><option value="L">L</option></select>`;
+            let html = `<span class="text-[10px] font-bold w-4 text-gray-400">${idx+1}</span><input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-12 p-1 text-sm border rounded bg-white text-gray-900 placeholder-gray-400">`;
+            if(team === 'home') html += `<input type="text" id="${team}_name_${idx}" placeholder="Nom" class="flex-1 p-1 text-sm border rounded bg-white text-gray-900 placeholder-gray-400"><select id="${team}_role_${idx}" class="p-1 text-sm border rounded w-16 bg-white text-gray-900"><option value="?">?</option><option value="OH">R4</option><option value="MB">C</option><option value="S">P</option><option value="OPP">Pt</option><option value="L">L</option></select>`;
             d.innerHTML = html; c.appendChild(d);
         }
 
@@ -279,15 +279,13 @@
                 });
             };
             renderHalf(teamLeft, 'courtLeft', POS_LEFT); renderHalf(teamRight, 'courtRight', POS_RIGHT);
-            document.getElementById('historyLog').innerHTML = s.history.slice(-4).reverse().map(h => `<div class="flex justify-between items-center border-b pb-1"><span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span><span class="text-xs bg-gray-100 px-2 rounded">${h.action} (${h.actor_num})</span></div>`).join('');
+            document.getElementById('historyLog').innerHTML = s.history.slice(-4).reverse().map(h => `<div class="flex justify-between items-center border-b pb-1"><span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span><span class="text-xs bg-gray-100 px-2 rounded text-gray-800">${h.action} (${h.actor_num})</span></div>`).join('');
 
-            // SYNCHRONISATION LIVE SILENCIEUSE
             if (currentLiveMatchId) silentUpdateLiveScore();
         }
 
-        // --- GESTION DU LIVE (NOUVEAU) ---
         async function toggleLive() {
-            if (currentLiveMatchId) return; // Déjà en direct
+            if (currentLiveMatchId) return; 
             try {
                 const res = await fetch('/api/go_live', { 
                     method: 'POST', headers: {'Content-Type': 'application/json'}, 
@@ -321,7 +319,7 @@
         function fillGrid(elemId, team, isPos) {
             const div = document.getElementById(elemId); div.innerHTML = '';
             game.state[team].onCourt.forEach(p => {
-                let btn = document.createElement('button'); btn.className = "h-12 w-12 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition shadow-sm text-lg"; btn.innerText = p.num;
+                let btn = document.createElement('button'); btn.className = "h-12 w-12 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition shadow-sm text-lg text-gray-900 bg-white"; btn.innerText = p.num;
                 btn.onclick = () => {
                     Array.from(div.children).forEach(c => c.classList.remove('bg-primary', 'text-white')); btn.classList.add('bg-primary', 'text-white');
                     game.state.tempPoint.actorTeam = team; game.state.tempPoint.actorNum = p.num;
@@ -350,7 +348,7 @@
         async function sendToDB() {
             if(!confirm("Synchroniser la fin du match ?")) return;
             const payload = {
-                match_id: currentLiveMatchId, // On envoie l'ID pour que Python sache quoi mettre à jour
+                match_id: currentLiveMatchId, 
                 homeName: game.state.home.name, awayName: game.state.away.name, setsHome: game.state.home.sets, setsAway: game.state.away.sets,
                 winner: game.state.home.sets > game.state.away.sets ? game.state.home.name : (game.state.away.sets > game.state.home.sets ? game.state.away.name : "En cours"),
                 history: game.state.history
@@ -358,7 +356,12 @@
             try {
                 const res = await fetch('/api/save_match', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                 const json = await res.json(); alert(json.message);
-                if(json.status === "success") currentLiveMatchId = null; // Le match n'est plus live
+                if(json.status === "success") {
+                    currentLiveMatchId = null;
+                    const btn = document.getElementById('btnGoLive');
+                    btn.classList.remove('bg-red-600', 'text-white', 'border-red-600', 'animate-pulse');
+                    btn.innerHTML = `<span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden sm:inline">Go Live</span>`;
+                }
             } catch(e) { alert("Erreur Cloud : " + e); }
         }
     </script>
