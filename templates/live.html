@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>En Direct - VolleyLive Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700;900&display=swap" rel="stylesheet"/>
+    <style>body { font-family: 'Lexend', sans-serif; }</style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+
+    <header class="bg-black p-4 flex justify-between items-center border-b border-gray-800">
+        <h1 class="text-2xl font-bold text-red-500 flex items-center gap-2">
+            <span class="animate-pulse">🔴</span> MATCHS EN DIRECT
+        </h1>
+        <button onclick="leaveMatch()" id="btnBack" class="hidden bg-gray-800 px-4 py-2 rounded-lg font-bold hover:bg-gray-700 transition">
+            Retour à la liste
+        </button>
+    </header>
+
+    <main class="flex-1 flex flex-col items-center justify-center p-6 w-full max-w-6xl mx-auto">
+        
+        <div id="viewList" class="w-full">
+            <p class="text-gray-400 mb-6 text-center">Sélectionnez un match pour voir le score en temps réel.</p>
+            <div id="matchesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                </div>
+            <p id="noMatchMsg" class="text-center text-gray-600 italic hidden mt-10">Aucun match en direct pour ce club actuellement.</p>
+        </div>
+
+        <div id="viewScore" class="w-full hidden flex-col items-center">
+            
+            <div class="bg-gray-800 rounded-3xl p-8 w-full max-w-4xl shadow-2xl border border-gray-700 relative overflow-hidden">
+                <div class="absolute top-0 left-0 w-full bg-red-600 text-center py-2 font-bold tracking-widest uppercase text-sm">
+                    SET <span id="liveSet">1</span>
+                </div>
+
+                <div class="mt-8 flex justify-between items-center">
+                    <div class="flex-1 text-center">
+                        <h2 id="liveHomeName" class="text-2xl md:text-4xl font-bold text-gray-300 mb-2 truncate px-4">Domicile</h2>
+                        <div class="text-[8rem] md:text-[12rem] font-black leading-none text-white tracking-tighter" id="liveHomeScore">0</div>
+                        <div class="mt-4 bg-gray-900 inline-block px-6 py-2 rounded-full font-bold text-xl border border-gray-700">
+                            Sets: <span id="liveHomeSets" class="text-blue-400">0</span>
+                        </div>
+                    </div>
+
+                    <div class="text-4xl md:text-6xl font-black text-gray-700 mx-4">-</div>
+
+                    <div class="flex-1 text-center">
+                        <h2 id="liveAwayName" class="text-2xl md:text-4xl font-bold text-gray-300 mb-2 truncate px-4">Extérieur</h2>
+                        <div class="text-[8rem] md:text-[12rem] font-black leading-none text-white tracking-tighter" id="liveAwayScore">0</div>
+                        <div class="mt-4 bg-gray-900 inline-block px-6 py-2 rounded-full font-bold text-xl border border-gray-700">
+                            Sets: <span id="liveAwaySets" class="text-blue-400">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        let viewingMatchId = null;
+
+        async function fetchLiveData() {
+            try {
+                const res = await fetch('/api/live_matches');
+                const matches = await res.json();
+
+                if (viewingMatchId) {
+                    // Si on regarde un match spécifique
+                    const match = matches.find(m => m.id === viewingMatchId);
+                    if (match) {
+                        updateScoreboard(match);
+                    } else {
+                        // Le match a disparu (le statisticien a cliqué sur "Sync Fin")
+                        alert("Le match est terminé ou la diffusion a été coupée.");
+                        leaveMatch();
+                    }
+                } else {
+                    // Si on est sur la liste
+                    renderList(matches);
+                }
+            } catch(e) {
+                console.error("Erreur de connexion");
+            }
+        }
+
+        function renderList(matches) {
+            const container = document.getElementById('matchesContainer');
+            const noMatchMsg = document.getElementById('noMatchMsg');
+            
+            container.innerHTML = '';
+            if (matches.length === 0) {
+                noMatchMsg.classList.remove('hidden');
+            } else {
+                noMatchMsg.classList.add('hidden');
+                matches.forEach(m => {
+                    container.innerHTML += `
+                        <div onclick="joinMatch(${m.id})" class="bg-gray-800 p-6 rounded-2xl cursor-pointer hover:bg-gray-700 transition border border-gray-700 flex justify-between items-center group">
+                            <div class="flex-1">
+                                <p class="text-xs text-red-500 font-bold uppercase tracking-widest mb-2 flex items-center gap-1"><span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span> Set ${m.current_set}</p>
+                                <h3 class="text-xl font-bold">${m.team_home} vs ${m.team_away}</h3>
+                            </div>
+                            <div class="text-3xl font-black bg-gray-900 px-4 py-2 rounded-xl group-hover:scale-105 transition">
+                                ${m.score_home} - ${m.score_away}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function joinMatch(id) {
+            viewingMatchId = id;
+            document.getElementById('viewList').classList.add('hidden');
+            document.getElementById('viewScore').classList.remove('hidden');
+            document.getElementById('viewScore').classList.add('flex');
+            document.getElementById('btnBack').classList.remove('hidden');
+            fetchLiveData(); // Forcer une maj immédiate
+        }
+
+        function leaveMatch() {
+            viewingMatchId = null;
+            document.getElementById('viewList').classList.remove('hidden');
+            document.getElementById('viewScore').classList.add('hidden');
+            document.getElementById('viewScore').classList.remove('flex');
+            document.getElementById('btnBack').classList.add('hidden');
+            fetchLiveData();
+        }
+
+        function updateScoreboard(match) {
+            document.getElementById('liveSet').innerText = match.current_set;
+            document.getElementById('liveHomeName').innerText = match.team_home;
+            document.getElementById('liveAwayName').innerText = match.team_away;
+            document.getElementById('liveHomeScore').innerText = match.score_home;
+            document.getElementById('liveAwayScore').innerText = match.score_away;
+            document.getElementById('liveHomeSets').innerText = match.sets_home;
+            document.getElementById('liveAwaySets').innerText = match.sets_away;
+        }
+
+        // Rafraichir les données toutes les 2 secondes
+        setInterval(fetchLiveData, 2000);
+        fetchLiveData(); // Premier appel au chargement
+    </script>
+</body>
+</html>
