@@ -59,15 +59,14 @@
                 </div>
             </div>
             <div id="step1" class="hidden">
-                <h3 class="text-xl font-bold mb-4">Configuration</h3>
+                <h3 class="text-xl font-bold mb-4">Configuration des Équipes</h3>
                 <div class="space-y-4">
                     <div><label class="text-xs font-bold text-gray-500">NOUS (DOMICILE)</label><input type="text" id="homeName" value="Mon Club" class="w-full rounded-lg border-gray-300 p-2 bg-white text-gray-900 placeholder-gray-400"></div>
                     <div><label class="text-xs font-bold text-gray-500">EUX (EXTÉRIEUR)</label><input type="text" id="awayName" value="Adversaire" class="w-full rounded-lg border-gray-300 p-2 bg-white text-gray-900 placeholder-gray-400"></div>
-                    <div><label class="text-xs font-bold text-gray-500">PREMIER SERVICE</label><select id="firstServer" class="w-full rounded-lg border-gray-300 p-2 bg-white text-gray-900"><option value="home">Nous servons</option><option value="away">Eux servent</option></select></div>
                 </div>
                 <div class="flex gap-3 mt-6">
-                    <button onclick="showStep('stepLoad')" class="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg font-bold">Retour</button>
-                    <button onclick="initRostersUI(); showStep('step2')" class="flex-1 py-2 bg-primary text-white rounded-lg font-bold">Suivant</button>
+                    <button onclick="showStep('stepLoad')" class="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg font-bold hover:bg-gray-300">Retour</button>
+                    <button onclick="initRostersUI(); showStep('step2')" class="flex-1 py-2 bg-primary text-white rounded-lg font-bold hover:bg-blue-600">Suivant</button>
                 </div>
             </div>
             <div id="step2" class="hidden">
@@ -75,15 +74,15 @@
                 <div class="grid grid-cols-2 gap-6 h-80 overflow-y-auto mb-4 border rounded-lg p-4">
                     <div>
                         <div class="flex justify-between items-center mb-2"><h4 class="font-bold text-primary">Nous</h4><button onclick="document.getElementById('excelInput').click()" class="text-[10px] bg-green-600 text-white px-2 py-1 rounded flex items-center gap-1 hover:bg-green-700"><span class="material-symbols-outlined text-sm">table_view</span> Excel</button><input type="file" id="excelInput" accept=".xlsx, .xls" class="hidden" onchange="importHomeTeamFromExcel(this)"></div>
-                        <div id="homeRosterList" class="space-y-2"></div><button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 text-gray-900 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
+                        <div id="homeRosterList" class="space-y-2"></div><button onclick="addPlayerRow('home')" class="text-xs bg-gray-200 text-gray-900 px-2 py-1 rounded mt-2 w-full font-bold">+ Joueur</button>
                     </div>
                     <div>
                         <h4 class="font-bold text-gray-500 mb-2">Eux</h4>
-                        <div id="awayRosterList" class="space-y-2"></div><button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 text-gray-900 px-2 py-1 rounded mt-2 w-full">+ Joueur</button>
+                        <div id="awayRosterList" class="space-y-2"></div><button onclick="addPlayerRow('away')" class="text-xs bg-gray-200 text-gray-900 px-2 py-1 rounded mt-2 w-full font-bold">+ Joueur</button>
                     </div>
                 </div>
                 <div class="flex gap-3">
-                    <button onclick="showStep('step1')" class="px-4 py-3 bg-gray-200 text-gray-900 rounded-xl font-bold">Retour</button>
+                    <button onclick="showStep('step1')" class="px-4 py-3 bg-gray-200 text-gray-900 rounded-xl font-bold hover:bg-gray-300">Retour</button>
                     <button onclick="prepareMatch()" class="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold shadow-lg hover:bg-green-700 transition">🏐 PRÉPARER LE TERRAIN</button>
                 </div>
             </div>
@@ -97,14 +96,14 @@
                 <div id="secWinner" class="mb-4">
                     <h4 class="text-green-600 font-bold text-xs uppercase mb-2">1. Action Positive</h4>
                     <div id="gridWinners" class="grid grid-cols-6 gap-2 mb-2"></div>
-                    <div id="actionsWinner" class="hidden grid grid-cols-2 gap-2">
+                    <div id="actionsWinner" class="hidden grid grid-cols-2 gap-2 mt-2">
                         <button onclick="finalizeScore('Attaque')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Attaque</button><button onclick="finalizeScore('Block')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Block</button><button onclick="finalizeScore('Ace')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Ace</button><button onclick="finalizeScore('Feinte')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Feinte</button>
                     </div>
                 </div>
                 <div id="secLoser" class="mb-4">
                     <h4 class="text-red-500 font-bold text-xs uppercase mb-2">2. Faute Adverse</h4>
                     <div id="gridLosers" class="grid grid-cols-6 gap-2 mb-2"></div>
-                    <div id="actionsLoser" class="hidden grid grid-cols-2 gap-2">
+                    <div id="actionsLoser" class="hidden grid grid-cols-2 gap-2 mt-2">
                         <button onclick="finalizeScore('Attaque Out')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Attaque Out</button><button onclick="finalizeScore('Faute Filet')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Filet</button><button onclick="finalizeScore('Faute Service')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Service Raté</button><button onclick="finalizeScore('Faute Main')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Faute Main</button>
                     </div>
                 </div>
@@ -117,8 +116,8 @@
         <div class="bg-white dark:bg-gray-800 p-6 rounded-xl w-80 text-center">
             <h3 class="font-bold text-xl mb-2">Changement</h3>
             <p class="text-sm text-gray-500 mb-4">Sortie : <strong id="subOutName"></strong></p>
-            <select id="subInSelect" class="w-full border p-2 rounded mb-4 bg-white text-gray-900"></select>
-            <div class="flex gap-2"><button onclick="confirmSub()" class="flex-1 bg-primary text-white py-2 rounded font-bold">Confirmer</button><button onclick="document.getElementById('subModal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-900 py-2 rounded font-bold">Annuler</button></div>
+            <select id="subInSelect" class="w-full border border-gray-300 p-2 rounded mb-4 bg-white text-gray-900"></select>
+            <div class="flex gap-2"><button onclick="confirmSub()" class="flex-1 bg-primary text-white py-2 rounded font-bold">Confirmer</button><button onclick="document.getElementById('subModal').classList.add('hidden')" class="flex-1 bg-gray-200 text-gray-900 py-2 rounded font-bold hover:bg-gray-300">Annuler</button></div>
         </div>
     </div>
 
@@ -130,38 +129,62 @@
                 <div class="flex items-center gap-2">
                     <span class="text-xs font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded uppercase">Set <span id="setNum">1</span></span>
                     <span class="text-xs font-medium text-gray-500 uppercase">Sets: <span id="gSetLeft">0</span> - <span id="gSetRight">0</span></span>
+                    
+                    <div id="syncStatus" class="ml-2 flex items-center gap-1 text-gray-400 text-[10px] font-bold">
+                        <span class="material-symbols-outlined text-sm" id="syncIcon">cloud_done</span>
+                        <span id="syncText" class="hidden sm:inline"></span>
+                    </div>
                 </div>
             </div>
         </div>
+
         <div class="flex items-center gap-2">
             
+            <button onclick="startNewGame()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-bold hover:bg-gray-100 transition mr-2">
+                <span class="material-symbols-outlined text-sm">add_box</span> <span class="hidden lg:inline">Nouveau</span>
+            </button>
+
             <button id="btnGoLive" onclick="toggleLive()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-bold hover:bg-red-50 transition">
-                <span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden sm:inline">Go Live</span>
+                <span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">Go Live</span>
             </button>
 
             <a href="/live" target="_blank" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-100 text-green-700 text-sm font-bold hover:bg-green-200 transition">
-                <span class="material-symbols-outlined text-sm">live_tv</span> <span class="hidden sm:inline">Vue Spectateur</span>
+                <span class="material-symbols-outlined text-sm">live_tv</span> <span class="hidden lg:inline">Vue Spectateur</span>
             </a>
-
-            <a href="/extraction" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700 text-sm font-bold hover:bg-purple-200 transition">
+            <a href="/extraction" target="_blank" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700 text-sm font-bold hover:bg-purple-200 transition">
                 <span class="material-symbols-outlined text-sm">document_scanner</span>
             </a>
 
             <button onclick="switchSides()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-bold border border-gray-300 hover:bg-gray-200"><span class="material-symbols-outlined text-sm">swap_horiz</span></button>
-            <button onclick="sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm hover:bg-blue-700"><span class="material-symbols-outlined text-sm">cloud_upload</span> Sync Fin</button>
+            <button onclick="sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm hover:bg-blue-700"><span class="material-symbols-outlined text-sm">cloud_upload</span> <span class="hidden sm:inline">Sync Fin</span></button>
         </div>
     </header>
 
     <main class="flex-1 flex flex-col max-w-6xl mx-auto w-full p-4 gap-4" id="gameUI" style="display:none;">
+        
         <div class="grid grid-cols-2 gap-4" id="scoreBoardContainer">
             <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center"><p id="lblLeft" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Gauche</p><p id="scoreLeft" class="text-7xl font-bold tracking-tighter text-gray-800 dark:text-white">0</p></div>
             <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center"><p id="lblRight" class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-1">Droite</p><p id="scoreRight" class="text-7xl font-bold tracking-tighter text-gray-800 dark:text-white">0</p></div>
         </div>
 
-        <div id="preMatchBanner" class="bg-blue-50 border-2 border-blue-400 rounded-xl p-4 text-center shadow-md animate-pulse">
-            <h3 class="font-bold text-blue-800 mb-1">Phase de Placement</h3>
-            <p class="text-sm text-blue-600 mb-4">Touchez un joueur, puis un autre de son équipe pour inverser leurs positions.</p>
-            <button onclick="startActualMatch()" class="bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-green-700 transition">▶️ DÉBUTER LE MATCH</button>
+        <div id="preMatchBanner" class="bg-blue-50 border-2 border-blue-400 rounded-xl p-6 text-center shadow-md animate-pulse">
+            <h3 class="text-xl font-bold text-blue-800 mb-2">Préparation du Set <span id="prepSetNum">1</span></h3>
+            
+            <div class="my-4 flex flex-col sm:flex-row justify-center items-center gap-4 bg-white/50 py-3 rounded-lg border border-blue-200 w-fit mx-auto px-6">
+                <span class="font-bold text-blue-900 uppercase text-sm tracking-widest">1er Service :</span>
+                <button id="btnServeHome" onclick="setFirstServer('home')" class="px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition">🏐 Nous</button>
+                <button id="btnServeAway" onclick="setFirstServer('away')" class="px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition">🏐 Eux</button>
+            </div>
+
+            <p class="text-sm text-blue-600 mt-4">Touchez un joueur pour échanger sa position, ou le remplacer.</p>
+            
+            <button id="preMatchSubBtn" onclick="openPreMatchSub()" class="hidden mx-auto mt-4 bg-yellow-500 text-white font-bold py-2 px-6 rounded-full shadow-lg hover:bg-yellow-600 transition flex items-center gap-2">
+                <span class="material-symbols-outlined">swap_horiz</span> Remplacer ce joueur par le banc
+            </button>
+
+            <button onclick="startActualMatch()" class="mt-6 bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-green-700 transition transform hover:scale-105 text-lg">
+                ▶️ DÉBUTER LE MATCH
+            </button>
         </div>
 
         <div class="relative w-full aspect-[2/1] max-h-[450px] court-wood rounded-xl border-[8px] border-white shadow-lg overflow-hidden flex flex-row">
@@ -172,7 +195,7 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
             <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 h-32 overflow-y-auto"><p class="text-[10px] font-bold text-gray-400 uppercase mb-2"><span class="material-symbols-outlined text-sm align-middle">list_alt</span> Historique</p><div id="historyLog" class="space-y-1 text-sm"></div></div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col justify-center"><button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg font-bold hover:bg-red-200 transition uppercase tracking-widest">🏁 Fin du Set (Auto-Save)</button></div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm flex flex-col justify-center"><button onclick="endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg font-bold hover:bg-red-200 transition uppercase tracking-widest">🏁 Fin du Set (Auto-Save)</button></div>
         </div>
     </main>
 
@@ -192,11 +215,31 @@
         const POS_LEFT = [{ x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }, { x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }];
         const POS_RIGHT = [{ x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }, { x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }];
 
+        // NOUVEAU: INDICATEUR DE SYNC VISUEL
+        function setSyncStatus(status) {
+            const icon = document.getElementById('syncIcon');
+            const text = document.getElementById('syncText');
+            if(status === 'syncing') {
+                icon.innerText = 'cloud_sync'; icon.className = 'material-symbols-outlined text-sm text-blue-500 animate-spin'; text.innerText = 'Envoi...';
+            } else if (status === 'success') {
+                icon.innerText = 'cloud_done'; icon.className = 'material-symbols-outlined text-sm text-green-500'; text.innerText = 'Sauvegardé';
+                setTimeout(() => { icon.className = 'material-symbols-outlined text-sm text-gray-400'; text.innerText = ''; }, 3000);
+            } else if (status === 'error') {
+                icon.innerText = 'cloud_off'; icon.className = 'material-symbols-outlined text-sm text-red-500'; text.innerText = 'Erreur';
+            }
+        }
+
+        // NOUVEAU: RECOMMENCER MATCH
+        function startNewGame() {
+            if(confirm("Créer un nouveau match ? Toutes les données non sauvegardées seront effacées.")) {
+                location.reload();
+            }
+        }
+
         function showStep(id) { ['stepLoad', 'step1', 'step2'].forEach(s => document.getElementById(s).classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
 
         function importHomeTeamFromExcel(input) {
-            const file = input.files[0]; if(!file) return;
-            const r = new FileReader();
+            const file = input.files[0]; if(!file) return; const r = new FileReader();
             r.onload = function(e) {
                 const workbook = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
                 const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
@@ -229,8 +272,8 @@
 
         function addPlayerRow(team, idx) {
             const c = document.getElementById(team + 'RosterList'); const d = document.createElement('div'); d.className = "flex gap-2 items-center mb-2";
-            let html = `<span class="text-[10px] font-bold w-4 text-gray-400">${idx+1}</span><input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-12 p-1 text-sm border rounded bg-white text-gray-900 placeholder-gray-400">`;
-            if(team === 'home') html += `<input type="text" id="${team}_name_${idx}" placeholder="Nom" class="flex-1 p-1 text-sm border rounded bg-white text-gray-900 placeholder-gray-400"><select id="${team}_role_${idx}" class="p-1 text-sm border rounded w-16 bg-white text-gray-900"><option value="?">?</option><option value="OH">R4</option><option value="MB">C</option><option value="S">P</option><option value="OPP">Pt</option><option value="L">L</option></select>`;
+            let html = `<span class="text-[10px] font-bold w-4 text-gray-400">${idx+1}</span><input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-12 p-1 text-sm border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400">`;
+            if(team === 'home') html += `<input type="text" id="${team}_name_${idx}" placeholder="Nom" class="flex-1 p-1 text-sm border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400"><select id="${team}_role_${idx}" class="p-1 text-sm border border-gray-300 rounded w-16 bg-white text-gray-900"><option value="?">?</option><option value="OH">R4</option><option value="MB">C</option><option value="S">P</option><option value="OPP">Pt</option><option value="L">L</option></select>`;
             d.innerHTML = html; c.appendChild(d);
         }
 
@@ -245,21 +288,77 @@
                 }
                 while(starters.length < 6) starters.push({num:'?', name:'?', role:'?'}); return { all: roster, court: starters };
             };
-            game.initializeMatch(document.getElementById('homeName').value, document.getElementById('awayName').value, document.getElementById('firstServer').value, parse('home').all, parse('home').court, parse('away').all, parse('away').court);
-            isHomeLeft = true; document.getElementById('setupModal').classList.add('hidden'); document.getElementById('gameUI').style.display = 'flex';
-            document.getElementById('preMatchBanner').classList.remove('hidden'); document.getElementById('scoringControls').classList.add('hidden');
+            
+            // Le serveur initial est null, l'utilisateur doit le choisir avant le début
+            game.initializeMatch(document.getElementById('homeName').value, document.getElementById('awayName').value, null, parse('home').all, parse('home').court, parse('away').all, parse('away').court);
+            
+            isHomeLeft = true; 
+            document.getElementById('setupModal').classList.add('hidden'); 
+            document.getElementById('gameUI').style.display = 'flex';
+            document.getElementById('preMatchBanner').classList.remove('hidden'); 
+            document.getElementById('scoringControls').classList.add('hidden');
+            
+            // Re-initialiser les boutons de service
+            document.getElementById('btnServeHome').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
+            document.getElementById('btnServeAway').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
+            
             updateScreen();
         }
 
-        function startActualMatch() { game.startScoring(); document.getElementById('preMatchBanner').classList.add('hidden'); document.getElementById('scoringControls').classList.remove('hidden'); swapSelection = null; updateScreen(); }
+        // NOUVEAU: SÉLECTION DU SERVICE
+        function setFirstServer(team) {
+            game.state.server = team;
+            document.getElementById('btnServeHome').className = team === 'home' ? 'px-6 py-2 border-2 border-red-500 bg-red-100 text-red-700 rounded-xl text-sm font-bold transition transform scale-105' : 'px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition';
+            document.getElementById('btnServeAway').className = team === 'away' ? 'px-6 py-2 border-2 border-red-500 bg-red-100 text-red-700 rounded-xl text-sm font-bold transition transform scale-105' : 'px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition';
+            updateScreen();
+        }
+
+        function startActualMatch() { 
+            if(!game.state.server) {
+                alert("⚠️ Veuillez choisir quelle équipe a le premier service !");
+                return;
+            }
+            game.startScoring(); 
+            document.getElementById('preMatchBanner').classList.add('hidden'); 
+            document.getElementById('scoringControls').classList.remove('hidden'); 
+            swapSelection = null; 
+            updateScreen(); 
+        }
+
         function switchSides() { isHomeLeft = !isHomeLeft; updateScreen(); }
 
+        // MODIFIÉ: GESTION DU CLIC PRE-MATCH (REMPLACEMENT OU ÉCHANGE)
         function handlePlayerClick(team, idx) {
-            if (game.state.isStarted) openSub(team, idx);
-            else {
-                if (!swapSelection) { swapSelection = { team, idx }; updateScreen(); } 
-                else { if (swapSelection.team === team) game.swapPositions(team, swapSelection.idx, idx); swapSelection = null; updateScreen(); }
+            if (game.state.isStarted) {
+                openSub(team, idx); // Match en cours : Remplacement direct
+            } else {
+                if (!swapSelection) { 
+                    swapSelection = { team, idx }; 
+                    document.getElementById('preMatchSubBtn').classList.remove('hidden'); // Afficher bouton remplacement
+                    updateScreen(); 
+                } 
+                else { 
+                    if (swapSelection.team === team && swapSelection.idx === idx) {
+                        // Annuler sélection
+                        swapSelection = null;
+                        document.getElementById('preMatchSubBtn').classList.add('hidden');
+                    } else if (swapSelection.team === team) {
+                        // Échanger deux joueurs
+                        game.swapPositions(team, swapSelection.idx, idx); 
+                        swapSelection = null; 
+                        document.getElementById('preMatchSubBtn').classList.add('hidden');
+                    }
+                    updateScreen(); 
+                }
             }
+        }
+
+        // NOUVEAU: OUVRIR LE MODAL DE REMPLACEMENT EN PRE-MATCH
+        function openPreMatchSub() {
+            if(!swapSelection) return;
+            openSub(swapSelection.team, swapSelection.idx);
+            swapSelection = null;
+            document.getElementById('preMatchSubBtn').classList.add('hidden');
         }
 
         function updateScreen() {
@@ -268,7 +367,7 @@
             document.getElementById('btnPointLeft').className = (teamLeft === 'home') ? "flex flex-col items-center justify-center py-5 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform" : "flex flex-col items-center justify-center py-5 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform";
             document.getElementById('lblRight').innerText = s[teamRight].name; document.getElementById('scoreRight').innerText = s[teamRight].score; document.getElementById('txtPointRight').innerText = "+ " + s[teamRight].name;
             document.getElementById('btnPointRight').className = (teamRight === 'home') ? "flex flex-col items-center justify-center py-5 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform" : "flex flex-col items-center justify-center py-5 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform";
-            document.getElementById('gSetLeft').innerText = s[teamLeft].sets; document.getElementById('gSetRight').innerText = s[teamRight].sets; document.getElementById('setNum').innerText = s.set; document.getElementById('matchVersus').innerText = `${s.home.name} vs ${s.away.name}`;
+            document.getElementById('gSetLeft').innerText = s[teamLeft].sets; document.getElementById('gSetRight').innerText = s[teamRight].sets; document.getElementById('setNum').innerText = s.set; document.getElementById('prepSetNum').innerText = s.set; document.getElementById('matchVersus').innerText = `${s.home.name} vs ${s.away.name}`;
 
             const renderHalf = (team, containerId, positionsMap) => {
                 const container = document.getElementById(containerId); container.innerHTML = '';
@@ -281,11 +380,12 @@
             renderHalf(teamLeft, 'courtLeft', POS_LEFT); renderHalf(teamRight, 'courtRight', POS_RIGHT);
             document.getElementById('historyLog').innerHTML = s.history.slice(-4).reverse().map(h => `<div class="flex justify-between items-center border-b pb-1"><span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span><span class="text-xs bg-gray-100 px-2 rounded text-gray-800">${h.action} (${h.actor_num})</span></div>`).join('');
 
-            if (currentLiveMatchId) silentUpdateLiveScore();
+            if (currentLiveMatchId && game.state.isStarted) silentUpdateLiveScore();
         }
 
         async function toggleLive() {
             if (currentLiveMatchId) return; 
+            setSyncStatus('syncing');
             try {
                 const res = await fetch('/api/go_live', { 
                     method: 'POST', headers: {'Content-Type': 'application/json'}, 
@@ -296,19 +396,26 @@
                     currentLiveMatchId = data.match_id;
                     const btn = document.getElementById('btnGoLive');
                     btn.classList.add('bg-red-600', 'text-white', 'border-red-600', 'animate-pulse');
-                    btn.innerHTML = `<span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden sm:inline">EN DIRECT</span>`;
-                }
-            } catch(e) { console.error("Erreur Go Live"); }
+                    btn.innerHTML = `<span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">EN DIRECT</span>`;
+                    setSyncStatus('success');
+                } else setSyncStatus('error');
+            } catch(e) { setSyncStatus('error'); }
         }
 
         async function silentUpdateLiveScore() {
-            fetch('/api/update_live', { 
-                method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ match_id: currentLiveMatchId, set: game.state.set, scoreHome: game.state.home.score, scoreAway: game.state.away.score, setsHome: game.state.home.sets, setsAway: game.state.away.sets }) 
-            });
+            setSyncStatus('syncing');
+            try {
+                const res = await fetch('/api/update_live', { 
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ match_id: currentLiveMatchId, set: game.state.set, scoreHome: game.state.home.score, scoreAway: game.state.away.score, setsHome: game.state.home.sets, setsAway: game.state.away.sets }) 
+                });
+                if(res.ok) setSyncStatus('success');
+                else setSyncStatus('error');
+            } catch(e) { setSyncStatus('error'); }
         }
 
         function scoreFromSide(side) { openScoreModal((side === 'left') ? (isHomeLeft ? 'home' : 'away') : (isHomeLeft ? 'away' : 'home')); }
+        
         function openScoreModal(winner) {
             game.state.tempPoint = { winner, actorTeam: null, actorNum: null };
             document.getElementById('scoreTitle').innerText = `Point pour ${game.state[winner].name}`;
@@ -316,6 +423,7 @@
             fillGrid('gridWinners', winner, true); fillGrid('gridLosers', winner === 'home' ? 'away' : 'home', false);
             document.getElementById('scoreModal').classList.remove('hidden');
         }
+        
         function fillGrid(elemId, team, isPos) {
             const div = document.getElementById(elemId); div.innerHTML = '';
             game.state[team].onCourt.forEach(p => {
@@ -336,8 +444,29 @@
         }
         function confirmSub() { game.substitute(game.state.subTarget.team, game.state.subTarget.idx, document.getElementById('subInSelect').value); document.getElementById('subModal').classList.add('hidden'); updateScreen(); }
 
-        function endSet() { if(confirm("Confirmer la fin du set ?")) { if(game.endSet()) { downloadBackup(); switchSides(); updateScreen(); } } }
+        function endSet() { 
+            if(confirm("Confirmer la fin du set ?")) { 
+                if(game.endSet()) { 
+                    downloadBackup(); 
+                    switchSides(); 
+                    
+                    // On repasse en mode Pre-Match pour le choix du service
+                    game.state.isStarted = false;
+                    game.state.server = null; // Il faudra re-sélectionner le service
+                    
+                    document.getElementById('preMatchBanner').classList.remove('hidden'); 
+                    document.getElementById('scoringControls').classList.add('hidden');
+                    
+                    document.getElementById('btnServeHome').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
+                    document.getElementById('btnServeAway').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
+            
+                    updateScreen(); 
+                } 
+            } 
+        }
+        
         function downloadBackup() { const a = document.createElement('a'); a.href = game.generateBackupJSON(); a.download = `VOLLEY_BACKUP_${Date.now()}.json`; document.body.appendChild(a); a.click(); a.remove(); }
+        
         function loadGameFromFile(input) {
             const file = input.files[0]; if(!file) return; const r = new FileReader();
             r.onload = (e) => {
@@ -346,7 +475,8 @@
         }
 
         async function sendToDB() {
-            if(!confirm("Synchroniser la fin du match ?")) return;
+            if(!confirm("Synchroniser la fin du match avec le serveur ?")) return;
+            setSyncStatus('syncing');
             const payload = {
                 match_id: currentLiveMatchId, 
                 homeName: game.state.home.name, awayName: game.state.away.name, setsHome: game.state.home.sets, setsAway: game.state.away.sets,
@@ -355,14 +485,22 @@
             };
             try {
                 const res = await fetch('/api/save_match', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-                const json = await res.json(); alert(json.message);
+                const json = await res.json(); 
                 if(json.status === "success") {
+                    setSyncStatus('success');
+                    alert(json.message);
                     currentLiveMatchId = null;
                     const btn = document.getElementById('btnGoLive');
                     btn.classList.remove('bg-red-600', 'text-white', 'border-red-600', 'animate-pulse');
-                    btn.innerHTML = `<span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden sm:inline">Go Live</span>`;
+                    btn.innerHTML = `<span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">Go Live</span>`;
+                } else {
+                    setSyncStatus('error');
+                    alert(json.message);
                 }
-            } catch(e) { alert("Erreur Cloud : " + e); }
+            } catch(e) { 
+                setSyncStatus('error');
+                alert("Erreur Cloud : " + e); 
+            }
         }
     </script>
 </body>
