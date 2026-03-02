@@ -55,7 +55,7 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- ROUTES API POUR LES EQUIPES (NOUVEAU) ---
+# --- ROUTES API POUR LES EQUIPES ---
 @app.route('/api/my_teams', methods=['GET'])
 @login_required
 def get_my_teams():
@@ -68,7 +68,6 @@ def get_my_teams():
 @login_required
 def get_last_roster(team_id):
     with engine.connect() as conn:
-        # On cherche le dernier match enregistré pour cette équipe où un roster a été sauvegardé
         result = conn.execute(text("""
             SELECT roster_home, team_home 
             FROM matches 
@@ -155,12 +154,18 @@ def save_match():
                 for p in data['history']:
                     points_values.append({
                         "mid": match_id, "set": p['set'], "sh": p['score_dom'], "sa": p['score_ext'],
-                        "wp": p['winner_team'], "pt": p['point_type'], "act": p['action'], "pnum": str(p['actor_num']),
-                        "pteam": p['actor_team'], "snum": str(p['server_num']), "rh": p['rot_home'], "ra": p['rot_away']
+                        "wp": p['winner_team'], "pt": p['point_type'], "act": p['action'], 
+                        "pnum": str(p['actor_num']), "pteam": p['actor_team'], "snum": str(p['server_num']), 
+                        "rh": p['rot_home'], "ra": p['rot_away'],
+                        "alicence": p.get('actor_licence', ''),
+                        "slicence": p.get('server_licence', ''),
+                        "rhl": p.get('rot_home_licences', ''),
+                        "ral": p.get('rot_away_licences', '')
                     })
                 conn.execute(text("""
-                    INSERT INTO points (match_id, set_number, score_home, score_away, winner_point, point_type, action_type, player_num, player_team, server_num, rotation_home, rotation_away)
-                    VALUES (:mid, :set, :sh, :sa, :wp, :pt, :act, :pnum, :pteam, :snum, :rh, :ra)
+                    INSERT INTO points 
+                    (match_id, set_number, score_home, score_away, winner_point, point_type, action_type, player_num, player_team, server_num, rotation_home, rotation_away, player_licence, server_licence, rotation_home_licences, rotation_away_licences)
+                    VALUES (:mid, :set, :sh, :sa, :wp, :pt, :act, :pnum, :pteam, :snum, :rh, :ra, :alicence, :slicence, :rhl, :ral)
                 """), points_values)
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
