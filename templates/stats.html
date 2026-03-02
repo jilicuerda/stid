@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Analyse & Stats - VolleyLive</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <style>body { font-family: 'Lexend', sans-serif; }</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    
+    <header class="bg-blue-800 text-white p-4 shadow-md flex justify-between items-center">
+        <h1 class="text-xl font-bold flex items-center gap-2"><span class="material-symbols-outlined">query_stats</span> Analyse de Match</h1>
+        <a href="/" class="bg-blue-900 px-4 py-2 rounded-lg font-bold hover:bg-blue-950 transition">Retour au Live</a>
+    </header>
+
+    <main class="max-w-6xl mx-auto mt-8 p-4">
+        
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-8">
+            <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Sélectionnez un match de votre club :</label>
+            <div class="flex gap-4">
+                <select id="matchSelect" class="flex-1 border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-800 font-semibold focus:ring-blue-500">
+                    <option value="">Chargement des matchs...</option>
+                </select>
+                <button onclick="loadStats()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-md">
+                    <span class="material-symbols-outlined">analytics</span> Analyser
+                </button>
+            </div>
+            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Génération des graphiques en cours...</p>
+        </div>
+
+        <div id="statsContainer" class="hidden space-y-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 text-center">
+                <h2 id="matchTitleDisplay" class="text-3xl font-black text-gray-800">Titre du match</h2>
+            </div>
+            
+            <div id="setsGraphsZone" class="space-y-8">
+                </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Charger la liste des matchs au démarrage
+        document.addEventListener("DOMContentLoaded", async () => {
+            try {
+                const res = await fetch('/api/completed_matches');
+                const matches = await res.json();
+                const sel = document.getElementById('matchSelect');
+                sel.innerHTML = '<option value="" disabled selected>Choisissez un match enregistré...</option>';
+                matches.forEach(m => {
+                    sel.innerHTML += `<option value="${m.id}">${m.title}</option>`;
+                });
+            } catch (e) {
+                console.error("Erreur de chargement de la liste");
+            }
+        });
+
+        async function loadStats() {
+            const matchId = document.getElementById('matchSelect').value;
+            if (!matchId) return;
+
+            document.getElementById('loadingMsg').classList.remove('hidden');
+            document.getElementById('statsContainer').classList.add('hidden');
+
+            try {
+                const res = await fetch(`/api/match_stats/${matchId}`);
+                const data = await res.json();
+
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+
+                document.getElementById('matchTitleDisplay').innerText = data.match_title;
+                const zone = document.getElementById('setsGraphsZone');
+                zone.innerHTML = '';
+
+                // Afficher les graphiques par set
+                data.sets.forEach(s => {
+                    zone.innerHTML += `
+                        <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
+                            <div class="flex justify-between items-center mb-6 border-b pb-4">
+                                <h3 class="text-2xl font-bold text-gray-800">Set ${s.set}</h3>
+                                <span class="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-black text-xl border border-gray-300">Score: ${s.score}</span>
+                            </div>
+                            
+                            <div class="mb-8">
+                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Séquences de Points (Duel)</h4>
+                                <img src="data:image/png;base64,${s.graph_duel}" class="w-full rounded-xl border border-gray-100 shadow-sm" alt="Graphique Duel">
+                            </div>
+
+                            <div>
+                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Rotation de départ du set</h4>
+                                <img src="data:image/png;base64,${s.graph_rot}" class="w-full max-w-3xl mx-auto block rounded-xl border border-gray-100 shadow-sm" alt="Graphique Rotation">
+                            </div>
+                        </div>
+                    `;
+                });
+
+                document.getElementById('statsContainer').classList.remove('hidden');
+
+            } catch (e) {
+                alert("Erreur lors de la génération des statistiques.");
+            } finally {
+                document.getElementById('loadingMsg').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
