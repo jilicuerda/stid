@@ -55,7 +55,32 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- MATCH EN DIRECT (TABLETTE SAISIE) ---
+# --- ROUTES API POUR LES EQUIPES (NOUVEAU) ---
+@app.route('/api/my_teams', methods=['GET'])
+@login_required
+def get_my_teams():
+    club_id = session.get('club_id')
+    with engine.connect() as conn:
+        teams = conn.execute(text("SELECT id, name FROM teams WHERE club_id = :cid ORDER BY name"), {"cid": club_id}).fetchall()
+        return jsonify([{"id": t[0], "name": t[1]} for t in teams])
+
+@app.route('/api/last_roster/<int:team_id>', methods=['GET'])
+@login_required
+def get_last_roster(team_id):
+    with engine.connect() as conn:
+        # On cherche le dernier match enregistré pour cette équipe où un roster a été sauvegardé
+        result = conn.execute(text("""
+            SELECT roster_home, team_home 
+            FROM matches 
+            WHERE team_id = :tid AND roster_home IS NOT NULL 
+            ORDER BY created_at DESC LIMIT 1
+        """), {"tid": team_id}).fetchone()
+        
+        if result:
+            return jsonify({"status": "success", "roster": result[0], "last_team_name": result[1]})
+        return jsonify({"status": "empty"})
+
+# --- MATCH EN DIRECT ---
 @app.route('/')
 @login_required
 def index(): 
@@ -69,13 +94,14 @@ def go_live():
     with engine.connect() as conn:
         trans = conn.begin()
         result = conn.execute(text("""
-            INSERT INTO matches (club_id, team_home, team_away, current_set, score_home, score_away, sets_home, sets_away, is_live)
-            VALUES (:cid, :th, :ta, :cs, :sh, :sa, :setsh, :setsa, TRUE)
+            INSERT INTO matches (club_id, team_id, team_home, team_away, current_set, score_home, score_away, sets_home, sets_away, is_live, roster_home, roster_away)
+            VALUES (:cid, :tid, :th, :ta, :cs, :sh, :sa, :setsh, :setsa, TRUE, :rh, :ra)
             RETURNING id
         """), {
-            "cid": club_id, "th": data['homeName'], "ta": data['awayName'],
+            "cid": club_id, "tid": data.get('teamId'), "th": data['homeName'], "ta": data['awayName'],
             "cs": data['set'], "sh": data['scoreHome'], "sa": data['scoreAway'],
-            "setsh": data['setsHome'], "setsa": data['setsAway']
+            "setsh": data['setsHome'], "setsa": data['setsAway'],
+            "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))
         })
         match_id = result.fetchone()[0]
         trans.commit()
@@ -105,28 +131,25 @@ def update_live():
 def save_match():
     data = request.json
     club_id = session.get('club_id')
-    match_id = data.get('match_id') # Peut être null si on a pas cliqué sur Go Live
+    match_id = data.get('match_id')
+    team_id = data.get('teamId')
     
     try:
         with engine.connect() as conn:
             trans = conn.begin()
             
             if match_id:
-                # Si le match est déjà en DB (car il était en Live), on le met à jour et on le ferme (is_live = FALSE)
                 conn.execute(text("""
-                    UPDATE matches SET sets_home=:sh, sets_away=:sa, winner=:w, is_live=FALSE WHERE id=:mid
-                """), {"sh": data['setsHome'], "sa": data['setsAway'], "w": data['winner'], "mid": match_id})
-                # On nettoie les points précédents pour éviter les doublons lors des clics multiples sur "Sync"
+                    UPDATE matches SET sets_home=:sh, sets_away=:sa, winner=:w, is_live=FALSE, roster_home=:rh, roster_away=:ra WHERE id=:mid
+                """), {"sh": data['setsHome'], "sa": data['setsAway'], "w": data['winner'], "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {})), "mid": match_id})
                 conn.execute(text("DELETE FROM points WHERE match_id = :mid"), {"mid": match_id})
             else:
-                # Si le match n'a pas été mis en Live, on le crée
                 result = conn.execute(text("""
-                    INSERT INTO matches (club_id, team_home, team_away, sets_home, sets_away, winner)
-                    VALUES (:cid, :h, :a, :sh, :sa, :w) RETURNING id
-                """), {"cid": club_id, "h": data['homeName'], "a": data['awayName'], "sh": data['setsHome'], "sa": data['setsAway'], "w": data['winner']})
+                    INSERT INTO matches (club_id, team_id, team_home, team_away, sets_home, sets_away, winner, roster_home, roster_away)
+                    VALUES (:cid, :tid, :h, :a, :sh, :sa, :w, :rh, :ra) RETURNING id
+                """), {"cid": club_id, "tid": team_id, "h": data['homeName'], "a": data['awayName'], "sh": data['setsHome'], "sa": data['setsAway'], "w": data['winner'], "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))})
                 match_id = result.fetchone()[0]
 
-            # Insertion des points
             if data['history']:
                 points_values = []
                 for p in data['history']:
@@ -144,8 +167,6 @@ def save_match():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
-# --- ECRAN SPECTATEUR / COACH (NOUVEAU) ---
 @app.route('/live')
 @login_required
 def live_page():
@@ -156,17 +177,13 @@ def live_page():
 def live_matches_api():
     club_id = session.get('club_id')
     with engine.connect() as conn:
-        # Récupère tous les matchs marqués "is_live = TRUE" pour ce club
         matches = conn.execute(text("""
             SELECT id, team_home, team_away, current_set, score_home, score_away, sets_home, sets_away 
             FROM matches WHERE club_id = :cid AND is_live = TRUE
         """), {"cid": club_id}).fetchall()
-        
-        result = [{"id": m[0], "team_home": m[1], "team_away": m[2], "current_set": m[3], 
-                   "score_home": m[4], "score_away": m[5], "sets_home": m[6], "sets_away": m[7]} for m in matches]
+        result = [{"id": m[0], "team_home": m[1], "team_away": m[2], "current_set": m[3], "score_home": m[4], "score_away": m[5], "sets_home": m[6], "sets_away": m[7]} for m in matches]
     return jsonify(result)
 
-# --- ROUTES EXTRACTION PDF ---
 @app.route('/extraction')
 @login_required
 def extraction_page(): return render_template('extraction.html')
@@ -174,7 +191,7 @@ def extraction_page(): return render_template('extraction.html')
 @app.route('/api/upload_pdf', methods=['POST'])
 @login_required
 def upload_pdf():
-    if 'file' not in request.files: return jsonify({"error": "Aucun fichier envoyé"}), 400
+    if 'file' not in request.files: return jsonify({"error": "Aucun fichier"}), 400
     file = request.files['file']
     if file.filename == '': return jsonify({"error": "Fichier vide"}), 400
     if file and file.filename.endswith('.pdf'):
@@ -201,14 +218,14 @@ def save_pdf_report():
             return jsonify({"status": "success", "message": "Sauvegardé !"})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
-# --- ROUTES ADMINISTRATION ---
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
     with engine.connect() as conn:
         clubs = conn.execute(text("SELECT id, name FROM clubs ORDER BY id")).fetchall()
         users = conn.execute(text("SELECT u.id, u.username, u.role, c.name as club_name FROM users u LEFT JOIN clubs c ON u.club_id = c.id ORDER BY u.id")).fetchall()
-    return render_template('admin.html', clubs=clubs, users=users)
+        teams = conn.execute(text("SELECT t.id, t.name, c.name as club_name FROM teams t LEFT JOIN clubs c ON t.club_id = c.id ORDER BY c.name, t.name")).fetchall()
+    return render_template('admin.html', clubs=clubs, users=users, teams=teams)
 
 @app.route('/admin/add_club', methods=['POST'])
 @superadmin_required
@@ -237,6 +254,20 @@ def add_user():
                 trans.commit()
                 flash("Utilisateur créé.", "success")
         except: flash("Erreur: Pseudo pris.", "error")
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/add_team', methods=['POST'])
+@superadmin_required
+def add_team():
+    name, club_id = request.form.get('name'), request.form.get('club_id')
+    if name and club_id:
+        try:
+            with engine.connect() as conn:
+                trans = conn.begin()
+                conn.execute(text("INSERT INTO teams (name, club_id) VALUES (:n, :c)"), {"n": name, "c": club_id})
+                trans.commit()
+                flash("Collectif ajouté.", "success")
+        except Exception as e: flash("Erreur lors de l'ajout.", "error")
     return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
