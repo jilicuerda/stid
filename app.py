@@ -143,12 +143,25 @@ def save_match():
                 pts = [{
                     "mid": match_id, "set": p.get('set', 1), "sh": p.get('score_dom', 0), "sa": p.get('score_ext', 0), 
                     "wp": p.get('winner_team', ''), "pt": p.get('point_type', ''), "act": p.get('action', ''), 
-                    "pnum": str(p.get('actor_num', '')), "pteam": p.get('actor_team', ''), "snum": str(p.get('server_num', '')), 
+                    "pnum": str(p.get('actor_num', '')), "pteam": p.get('actor_team', ''), 
+                    "snum": str(p.get('server_num', '')), "steam": p.get('server_team', ''), # <-- AJOUTÉ ICI !
                     "rh": p.get('rot_home', ''), "ra": p.get('rot_away', ''), "alicence": p.get('actor_licence', ''), 
                     "slicence": p.get('server_licence', ''), "rhl": p.get('rot_home_licences', ''), "ral": p.get('rot_away_licences', '')
                 } for p in data['history']]
                 
-                conn.execute(text("INSERT INTO points (match_id, set_number, score_home, score_away, winner_point, point_type, action_type, player_num, player_team, server_num, rotation_home, rotation_away, player_licence, server_licence, rotation_home_licences, rotation_away_licences) VALUES (:mid, :set, :sh, :sa, :wp, :pt, :act, :pnum, :pteam, :snum, :rh, :ra, :alicence, :slicence, :rhl, :ral)"), pts)
+                conn.execute(text("""
+                    INSERT INTO points (
+                        match_id, set_number, score_home, score_away, winner_point, point_type, 
+                        action_type, player_num, player_team, server_num, server_team, 
+                        rotation_home, rotation_away, player_licence, server_licence, 
+                        rotation_home_licences, rotation_away_licences
+                    ) VALUES (
+                        :mid, :set, :sh, :sa, :wp, :pt, 
+                        :act, :pnum, :pteam, :snum, :steam, 
+                        :rh, :ra, :alicence, :slicence, 
+                        :rhl, :ral
+                    )
+                """), pts)
             
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
@@ -198,9 +211,6 @@ def save_pdf_report():
             return jsonify({"status": "success", "message": "Sauvegardé !"})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
-# ======================================================================
-# ROUTES POUR LES STATISTIQUES 
-# ======================================================================
 @app.route('/stats')
 @login_required
 def stats_page(): return render_template('stats.html')
@@ -210,25 +220,15 @@ def stats_page(): return render_template('stats.html')
 def get_completed_matches():
     try:
         with engine.connect() as conn:
-            # Récupère tous les matchs du club sans faire d'erreur même si des champs sont nuls
-            matches = conn.execute(text("""
-                SELECT id, team_home, team_away, created_at, winner 
-                FROM matches 
-                WHERE club_id = :cid 
-                ORDER BY created_at DESC
-            """), {"cid": session.get('club_id')}).fetchall()
-            
+            matches = conn.execute(text("SELECT id, team_home, team_away, created_at, winner FROM matches WHERE club_id = :cid ORDER BY created_at DESC"), {"cid": session.get('club_id')}).fetchall()
             result = []
             for m in matches:
-                # Formatage sécurisé
                 t_home = m[1] if m[1] else "Eq1"
                 t_away = m[2] if m[2] else "Eq2"
                 date_val = str(m[3])[:10] if m[3] else "?"
                 winner = f" - Victoire: {m[4]}" if m[4] else ""
-                
                 result.append({"id": m[0], "title": f"{t_home} vs {t_away} ({date_val}){winner}"})
             return jsonify(result)
-            
     except Exception as e:
         print(f"Erreur API Matchs: {e}")
         return jsonify({"error": str(e)}), 500
@@ -243,7 +243,6 @@ def get_match_stats(match_id):
             
             team_home, team_away = match_info[0], match_info[1]
             
-            # Récupération des points ET du gagnant du point
             points = conn.execute(text("""
                 SELECT set_number, score_home, score_away, server_team, server_num, rotation_home, rotation_away, winner_point 
                 FROM points WHERE match_id = :mid ORDER BY id ASC
@@ -265,29 +264,26 @@ def get_match_stats(match_id):
             for s_num, pts in sets_data.items():
                 if not pts: continue
                 
-                # --- CALCUL DE L'EFFICACITÉ PAR SERVEUR (ROTATION) ---
                 stats_serveurs_home = {}
                 stats_serveurs_away = {}
                 
                 for pt in pts:
                     s_team = pt['server_team']
-                    s_num = pt['server_num']
+                    s_num_val = pt['server_num']
                     w_team = pt['winner_point']
                     
                     if s_team == team_home:
-                        if s_num not in stats_serveurs_home: stats_serveurs_home[s_num] = {'scored': 0, 'conceded': 0}
-                        if w_team == team_home: stats_serveurs_home[s_num]['scored'] += 1
-                        else: stats_serveurs_home[s_num]['conceded'] += 1
+                        if s_num_val not in stats_serveurs_home: stats_serveurs_home[s_num_val] = {'scored': 0, 'conceded': 0}
+                        if w_team == team_home: stats_serveurs_home[s_num_val]['scored'] += 1
+                        else: stats_serveurs_home[s_num_val]['conceded'] += 1
                     elif s_team == team_away:
-                        if s_num not in stats_serveurs_away: stats_serveurs_away[s_num] = {'scored': 0, 'conceded': 0}
-                        if w_team == team_away: stats_serveurs_away[s_num]['scored'] += 1
-                        else: stats_serveurs_away[s_num]['conceded'] += 1
+                        if s_num_val not in stats_serveurs_away: stats_serveurs_away[s_num_val] = {'scored': 0, 'conceded': 0}
+                        if w_team == team_away: stats_serveurs_away[s_num_val]['scored'] += 1
+                        else: stats_serveurs_away[s_num_val]['conceded'] += 1
 
-                # Mise en forme pour le tableau HTML
                 home_efficiency = [{"num": k, "m": v['scored'], "e": v['conceded'], "d": v['scored']-v['conceded']} for k, v in stats_serveurs_home.items()]
                 away_efficiency = [{"num": k, "m": v['scored'], "e": v['conceded'], "d": v['scored']-v['conceded']} for k, v in stats_serveurs_away.items()]
                 
-                # Tri par numéro de maillot
                 home_efficiency = sorted(home_efficiency, key=lambda x: int(x['num']) if str(x['num']).isdigit() else 99)
                 away_efficiency = sorted(away_efficiency, key=lambda x: int(x['num']) if str(x['num']).isdigit() else 99)
 
