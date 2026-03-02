@@ -33,7 +33,6 @@ def superadmin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- AUTHENTIFICATION ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -58,18 +57,19 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- ROUTES API POUR LES EQUIPES ---
+@app.route('/')
+@login_required
+def index(): 
+    return render_template('index.html')
+
 @app.route('/api/my_teams', methods=['GET'])
 @login_required
 def get_my_teams():
-    club_id = session.get('club_id')
     try:
         with engine.connect() as conn:
-            teams = conn.execute(text("SELECT id, name FROM teams WHERE club_id = :cid ORDER BY name"), {"cid": club_id}).fetchall()
+            teams = conn.execute(text("SELECT id, name FROM teams WHERE club_id = :cid ORDER BY name"), {"cid": session.get('club_id')}).fetchall()
             return jsonify([{"id": t[0], "name": t[1]} for t in teams])
-    except Exception as e:
-        print("Erreur my_teams:", e)
-        return jsonify([])
+    except Exception as e: return jsonify([])
 
 @app.route('/api/last_roster/<int:team_id>', methods=['GET'])
 @login_required
@@ -86,15 +86,7 @@ def get_last_roster(team_id):
                 if isinstance(roster_data, str): roster_data = json.loads(roster_data)
                 return jsonify({"status": "success", "roster": roster_data, "last_team_name": result[1]})
             return jsonify({"status": "empty"})
-    except Exception as e:
-        print("Erreur last_roster:", e)
-        return jsonify({"status": "error", "message": "Erreur BDD. Les colonnes manquent-elles ?"}), 200
-
-# --- MATCH EN DIRECT ---
-@app.route('/')
-@login_required
-def index(): 
-    return render_template('index.html')
+    except Exception as e: return jsonify({"status": "error", "message": "Erreur BDD"}), 200
 
 @app.route('/api/go_live', methods=['POST'])
 @login_required
@@ -114,8 +106,7 @@ def go_live():
             match_id = result.fetchone()[0]
             trans.commit()
             return jsonify({"status": "success", "match_id": match_id})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 200
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
 
 @app.route('/api/update_live', methods=['POST'])
 @login_required
@@ -161,9 +152,7 @@ def save_match():
             
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
-    except Exception as e:
-        print("ERREUR SAUVEGARDE:", e)
-        return jsonify({"status": "error", "message": str(e)}), 200
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
 
 @app.route('/live')
 @login_required
@@ -209,33 +198,40 @@ def save_pdf_report():
             return jsonify({"status": "success", "message": "Sauvegardé !"})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
+# ======================================================================
+# ROUTES POUR LES STATISTIQUES 
+# ======================================================================
 @app.route('/stats')
 @login_required
 def stats_page(): return render_template('stats.html')
+
 @app.route('/api/completed_matches')
 @login_required
 def get_completed_matches():
-    club_id = session.get('club_id')
     try:
         with engine.connect() as conn:
+            # Récupère tous les matchs du club sans faire d'erreur même si des champs sont nuls
             matches = conn.execute(text("""
                 SELECT id, team_home, team_away, created_at, winner 
                 FROM matches 
                 WHERE club_id = :cid 
                 ORDER BY created_at DESC
-            """), {"cid": club_id}).fetchall()
+            """), {"cid": session.get('club_id')}).fetchall()
             
             result = []
             for m in matches:
-                # Extraction de la date (YYYY-MM-DD) garantie sans erreur
-                date_str = str(m[3])[:10] if m[3] else "Date inconnue"
-                winner_str = f" - Gagnant: {m[4]}" if m[4] else ""
-                result.append({"id": m[0], "title": f"{m[1]} vs {m[2]} ({date_str}){winner_str}"})
+                # Formatage sécurisé
+                t_home = m[1] if m[1] else "Eq1"
+                t_away = m[2] if m[2] else "Eq2"
+                date_val = str(m[3])[:10] if m[3] else "?"
+                winner = f" - Victoire: {m[4]}" if m[4] else ""
                 
+                result.append({"id": m[0], "title": f"{t_home} vs {t_away} ({date_val}){winner}"})
             return jsonify(result)
-    except Exception as e: 
+            
+    except Exception as e:
         print(f"Erreur API Matchs: {e}")
-        return jsonify([])
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/match_stats/<int:match_id>')
 @login_required
@@ -247,44 +243,70 @@ def get_match_stats(match_id):
             
             team_home, team_away = match_info[0], match_info[1]
             
+            # Récupération des points ET du gagnant du point
             points = conn.execute(text("""
-                SELECT set_number, score_home, score_away, server_team, server_num, rotation_home, rotation_away 
+                SELECT set_number, score_home, score_away, server_team, server_num, rotation_home, rotation_away, winner_point 
                 FROM points WHERE match_id = :mid ORDER BY id ASC
             """), {"mid": match_id}).fetchall()
             
-            # Si le match a été créé mais qu'aucun point n'a été enregistré
             if not points or len(points) == 0:
-                return jsonify({"error": "Il n'y a aucun point enregistré pour ce match (0 - 0). Impossible d'afficher des statistiques."})
+                return jsonify({"error": "Ce match ne contient aucun point. (Score 0-0)"}), 400
                 
             sets_data = {}
             for p in points:
-                set_num = p[0]
-                if set_num not in sets_data: sets_data[set_num] = []
-                sets_data[set_num].append({
-                    "score_home": p[1], "score_away": p[2], 
-                    "server_team": p[3], "server_num": p[4],
-                    "rotation_home": p[5], "rotation_away": p[6]
+                s_num = p[0]
+                if s_num not in sets_data: sets_data[s_num] = []
+                sets_data[s_num].append({
+                    "score_home": p[1], "score_away": p[2], "server_team": p[3], 
+                    "server_num": p[4], "rotation_home": p[5], "rotation_away": p[6], "winner_point": p[7]
                 })
                 
             graphs_payload = []
-            for set_num, pts in sets_data.items():
+            for s_num, pts in sets_data.items():
                 if not pts: continue
-                duel_b64 = generate_duel_graph(pts, team_home, team_away, set_num)
-                rot_b64 = generate_rotation_graph(pts, team_home, team_away)
                 
+                # --- CALCUL DE L'EFFICACITÉ PAR SERVEUR (ROTATION) ---
+                stats_serveurs_home = {}
+                stats_serveurs_away = {}
+                
+                for pt in pts:
+                    s_team = pt['server_team']
+                    s_num = pt['server_num']
+                    w_team = pt['winner_point']
+                    
+                    if s_team == team_home:
+                        if s_num not in stats_serveurs_home: stats_serveurs_home[s_num] = {'scored': 0, 'conceded': 0}
+                        if w_team == team_home: stats_serveurs_home[s_num]['scored'] += 1
+                        else: stats_serveurs_home[s_num]['conceded'] += 1
+                    elif s_team == team_away:
+                        if s_num not in stats_serveurs_away: stats_serveurs_away[s_num] = {'scored': 0, 'conceded': 0}
+                        if w_team == team_away: stats_serveurs_away[s_num]['scored'] += 1
+                        else: stats_serveurs_away[s_num]['conceded'] += 1
+
+                # Mise en forme pour le tableau HTML
+                home_efficiency = [{"num": k, "m": v['scored'], "e": v['conceded'], "d": v['scored']-v['conceded']} for k, v in stats_serveurs_home.items()]
+                away_efficiency = [{"num": k, "m": v['scored'], "e": v['conceded'], "d": v['scored']-v['conceded']} for k, v in stats_serveurs_away.items()]
+                
+                # Tri par numéro de maillot
+                home_efficiency = sorted(home_efficiency, key=lambda x: int(x['num']) if str(x['num']).isdigit() else 99)
+                away_efficiency = sorted(away_efficiency, key=lambda x: int(x['num']) if str(x['num']).isdigit() else 99)
+
                 score_final = f"{pts[-1]['score_home']} - {pts[-1]['score_away']}"
                 
                 graphs_payload.append({
-                    "set": set_num, "score": score_final,
-                    "graph_duel": duel_b64, "graph_rot": rot_b64
+                    "set": s_num, "score": score_final, 
+                    "graph_duel": generate_duel_graph(pts, team_home, team_away, s_num), 
+                    "graph_rot": generate_rotation_graph(pts, team_home, team_away),
+                    "eff_home": home_efficiency,
+                    "eff_away": away_efficiency
                 })
                 
             return jsonify({"match_title": f"{team_home} vs {team_away}", "sets": graphs_payload})
             
     except Exception as e:
         print(f"ERREUR GENERATION STATS : {e}")
-        return jsonify({"error": f"Erreur de lecture des données du match : {str(e)}"}), 200
-        
+        return jsonify({"error": f"Erreur de calcul des statistiques : {str(e)}"}), 500
+
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
@@ -337,4 +359,3 @@ def add_team():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
-
