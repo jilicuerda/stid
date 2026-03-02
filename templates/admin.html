@@ -17,17 +17,12 @@
             <h1 class="text-xl font-bold">Panneau d'Administration</h1>
         </div>
         <div class="flex gap-4">
-            <a href="/" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-semibold transition">
-                Voir l'Application
-            </a>
-            <a href="/logout" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold transition">
-                Déconnexion
-            </a>
+            <a href="/" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm font-semibold transition">Voir l'Application</a>
+            <a href="/logout" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-semibold transition">Déconnexion</a>
         </div>
     </header>
 
     <main class="max-w-7xl mx-auto p-6">
-        
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -38,118 +33,68 @@
             {% endif %}
         {% endwith %}
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <div class="flex items-center gap-2 mb-6">
-                    <span class="material-symbols-outlined text-blue-600">apartment</span>
-                    <h2 class="text-2xl font-bold text-gray-800">Gestion des Clubs</h2>
-                </div>
-
-                <form action="/admin/add_club" method="POST" class="mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Ajouter un nouveau club</h3>
+                <div class="flex items-center gap-2 mb-6"><span class="material-symbols-outlined text-blue-600">apartment</span><h2 class="text-xl font-bold text-gray-800">1. Les Clubs</h2></div>
+                <form action="/admin/add_club" method="POST" class="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
                     <div class="flex gap-2">
                         <input type="text" name="name" required placeholder="Nom du Club" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition">Ajouter</button>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-semibold transition">+</button>
                     </div>
                 </form>
-
-                <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Clubs existants</h3>
-                <div class="overflow-x-auto border border-gray-200 rounded-lg">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-gray-100 text-gray-600">
-                            <tr>
-                                <th class="p-3">ID</th>
-                                <th class="p-3">Nom du Club</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            {% for club in clubs %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="p-3 text-gray-500">#{{ club[0] }}</td>
-                                <td class="p-3 font-semibold text-gray-800">{{ club[1] }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg h-64 overflow-y-auto">
+                    <table class="w-full text-left text-sm"><tbody class="divide-y divide-gray-200">
+                        {% for club in clubs %} <tr class="hover:bg-gray-50"><td class="p-3 text-gray-500 w-10">#{{ club[0] }}</td><td class="p-3 font-semibold text-gray-800">{{ club[1] }}</td></tr> {% endfor %}
+                    </tbody></table>
                 </div>
             </div>
 
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                <div class="flex items-center gap-2 mb-6">
-                    <span class="material-symbols-outlined text-blue-600">group</span>
-                    <h2 class="text-2xl font-bold text-gray-800">Gestion des Comptes</h2>
-                </div>
-
-                <form action="/admin/add_user" method="POST" class="mb-8 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Créer un accès Coach</h3>
-                    
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Identifiant</label>
-                            <input type="text" name="username" required placeholder="ex: coach_paris" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Mot de passe</label>
-                            <input type="password" name="password" required placeholder="Mot de passe" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                        </div>
+                <div class="flex items-center gap-2 mb-6"><span class="material-symbols-outlined text-blue-600">groups</span><h2 class="text-xl font-bold text-gray-800">2. Les Collectifs</h2></div>
+                <form action="/admin/add_team" method="POST" class="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+                    <select name="club_id" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="" disabled selected>Appartient à quel club ?</option>
+                        {% for club in clubs %} <option value="{{ club[0] }}">{{ club[1] }}</option> {% endfor %}
+                    </select>
+                    <div class="flex gap-2">
+                        <input type="text" name="name" required placeholder="Ex: M18 Filles" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-semibold transition">+</button>
                     </div>
-
-                    <div class="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Club rattaché</label>
-                            <select name="club_id" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                <option value="" disabled selected>Sélectionner un club</option>
-                                {% for club in clubs %}
-                                <option value="{{ club[0] }}">{{ club[1] }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-600 mb-1">Rôle</label>
-                            <select name="role" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                <option value="coach" selected>Coach (Normal)</option>
-                                <option value="superadmin">Super Admin</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-bold transition">
-                        Créer le compte
-                    </button>
                 </form>
-
-                <h3 class="text-sm font-bold text-gray-500 uppercase mb-3">Comptes existants</h3>
-                <div class="overflow-x-auto border border-gray-200 rounded-lg">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-gray-100 text-gray-600">
-                            <tr>
-                                <th class="p-3">Utilisateur</th>
-                                <th class="p-3">Club</th>
-                                <th class="p-3">Rôle</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                            {% for user in users %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="p-3 font-semibold text-gray-800">{{ user[1] }}</td>
-                                <td class="p-3 text-gray-600">{{ user[3] }}</td>
-                                <td class="p-3">
-                                    {% if user[2] == 'superadmin' %}
-                                        <span class="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs font-bold uppercase">Admin</span>
-                                    {% else %}
-                                        <span class="bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-bold uppercase">Coach</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg h-48 overflow-y-auto">
+                    <table class="w-full text-left text-sm"><tbody class="divide-y divide-gray-200">
+                        {% for team in teams %} <tr class="hover:bg-gray-50"><td class="p-3 font-semibold text-gray-800">{{ team[1] }}</td><td class="p-3 text-gray-500 text-xs">{{ team[2] }}</td></tr> {% endfor %}
+                    </tbody></table>
                 </div>
-
             </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div class="flex items-center gap-2 mb-6"><span class="material-symbols-outlined text-blue-600">person</span><h2 class="text-xl font-bold text-gray-800">3. Les Coachs</h2></div>
+                <form action="/admin/add_user" method="POST" class="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" name="username" required placeholder="Identifiant" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="password" name="password" required placeholder="Mot de passe" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <select name="club_id" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="" disabled selected>Club du coach</option>
+                            {% for club in clubs %} <option value="{{ club[0] }}">{{ club[1] }}</option> {% endfor %}
+                        </select>
+                        <select name="role" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="coach" selected>Coach</option><option value="superadmin">Admin</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold transition">Créer le compte</button>
+                </form>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg h-32 overflow-y-auto">
+                    <table class="w-full text-left text-sm"><tbody class="divide-y divide-gray-200">
+                        {% for user in users %} <tr class="hover:bg-gray-50"><td class="p-3 font-semibold text-gray-800">{{ user[1] }}</td><td class="p-3 text-gray-600 text-xs">{{ user[3] }}</td></tr> {% endfor %}
+                    </tbody></table>
+                </div>
+            </div>
+
         </div>
     </main>
-
 </body>
 </html>
