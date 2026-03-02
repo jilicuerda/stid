@@ -183,10 +183,14 @@
                     const sTeam = this.state.server; 
                     const sPlayer = this.state[sTeam].onCourt[0];
                     const actor = details.actorTeam ? this.state[details.actorTeam].onCourt.find(p => p.num == details.actorNum) : null;
+                    
                     this.state[winner].score++;
+                    
+                    // CORRECTION ICI : Ajout de point_type et actor_team
                     this.state.history.push({
                         set: this.state.set, score_dom: this.state.home.score, score_ext: this.state.away.score, 
                         winner_team: this.state[winner].name, action: details.action, 
+                        point_type: details.action, actor_team: details.actorTeam, // <-- Les champs manquants
                         actor_num: details.actorNum, actor_licence: actor ? actor.licence : '', 
                         server_team: this.state[sTeam].name, server_num: sPlayer.num, server_licence: sPlayer.licence || '',
                         rot_home: this.state.home.onCourt.map(p=>p.num).join('-'), rot_home_licences: this.state.home.onCourt.map(p=>p.licence || '?').join('-'), 
