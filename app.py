@@ -212,15 +212,30 @@ def save_pdf_report():
 @app.route('/stats')
 @login_required
 def stats_page(): return render_template('stats.html')
-
 @app.route('/api/completed_matches')
 @login_required
 def get_completed_matches():
+    club_id = session.get('club_id')
     try:
         with engine.connect() as conn:
-            matches = conn.execute(text("SELECT id, team_home, team_away, created_at, winner FROM matches WHERE club_id = :cid ORDER BY created_at DESC"), {"cid": session.get('club_id')}).fetchall()
-            return jsonify([{"id": m[0], "title": f"{m[1]} vs {m[2]} ({m[3].strftime('%d/%m/%Y')})"} for m in matches])
-    except Exception: return jsonify([])
+            matches = conn.execute(text("""
+                SELECT id, team_home, team_away, created_at, winner 
+                FROM matches 
+                WHERE club_id = :cid 
+                ORDER BY created_at DESC
+            """), {"cid": club_id}).fetchall()
+            
+            result = []
+            for m in matches:
+                # Extraction de la date (YYYY-MM-DD) garantie sans erreur
+                date_str = str(m[3])[:10] if m[3] else "Date inconnue"
+                winner_str = f" - Gagnant: {m[4]}" if m[4] else ""
+                result.append({"id": m[0], "title": f"{m[1]} vs {m[2]} ({date_str}){winner_str}"})
+                
+            return jsonify(result)
+    except Exception as e: 
+        print(f"Erreur API Matchs: {e}")
+        return jsonify([])
 
 @app.route('/api/match_stats/<int:match_id>')
 @login_required
@@ -229,23 +244,47 @@ def get_match_stats(match_id):
         with engine.connect() as conn:
             match_info = conn.execute(text("SELECT team_home, team_away FROM matches WHERE id = :mid"), {"mid": match_id}).fetchone()
             if not match_info: return jsonify({"error": "Match non trouvé"}), 404
-            team_home, team_away = match_info[0], match_info[1]
-            points = conn.execute(text("SELECT set_number, score_home, score_away, server_team, server_num, rotation_home, rotation_away FROM points WHERE match_id = :mid ORDER BY id ASC"), {"mid": match_id}).fetchall()
-            if not points: return jsonify({"error": "Ce match ne contient aucun point."}), 400
             
+            team_home, team_away = match_info[0], match_info[1]
+            
+            points = conn.execute(text("""
+                SELECT set_number, score_home, score_away, server_team, server_num, rotation_home, rotation_away 
+                FROM points WHERE match_id = :mid ORDER BY id ASC
+            """), {"mid": match_id}).fetchall()
+            
+            # Si le match a été créé mais qu'aucun point n'a été enregistré
+            if not points or len(points) == 0:
+                return jsonify({"error": "Il n'y a aucun point enregistré pour ce match (0 - 0). Impossible d'afficher des statistiques."})
+                
             sets_data = {}
             for p in points:
-                s_num = p[0]
-                if s_num not in sets_data: sets_data[s_num] = []
-                sets_data[s_num].append({"score_home": p[1], "score_away": p[2], "server_team": p[3], "server_num": p[4], "rotation_home": p[5], "rotation_away": p[6]})
+                set_num = p[0]
+                if set_num not in sets_data: sets_data[set_num] = []
+                sets_data[set_num].append({
+                    "score_home": p[1], "score_away": p[2], 
+                    "server_team": p[3], "server_num": p[4],
+                    "rotation_home": p[5], "rotation_away": p[6]
+                })
                 
-            graphs = []
-            for s_num, pts in sets_data.items():
+            graphs_payload = []
+            for set_num, pts in sets_data.items():
                 if not pts: continue
-                graphs.append({"set": s_num, "score": f"{pts[-1]['score_home']} - {pts[-1]['score_away']}", "graph_duel": generate_duel_graph(pts, team_home, team_away, s_num), "graph_rot": generate_rotation_graph(pts, team_home, team_away)})
-            return jsonify({"match_title": f"{team_home} vs {team_away}", "sets": graphs})
-    except Exception as e: return jsonify({"error": f"Erreur : {str(e)}"}), 200
-
+                duel_b64 = generate_duel_graph(pts, team_home, team_away, set_num)
+                rot_b64 = generate_rotation_graph(pts, team_home, team_away)
+                
+                score_final = f"{pts[-1]['score_home']} - {pts[-1]['score_away']}"
+                
+                graphs_payload.append({
+                    "set": set_num, "score": score_final,
+                    "graph_duel": duel_b64, "graph_rot": rot_b64
+                })
+                
+            return jsonify({"match_title": f"{team_home} vs {team_away}", "sets": graphs_payload})
+            
+    except Exception as e:
+        print(f"ERREUR GENERATION STATS : {e}")
+        return jsonify({"error": f"Erreur de lecture des données du match : {str(e)}"}), 200
+        
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
@@ -298,3 +337,4 @@ def add_team():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+
