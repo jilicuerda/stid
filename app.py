@@ -33,6 +33,7 @@ def superadmin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# --- AUTHENTIFICATION ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -57,17 +58,14 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-@app.route('/')
-@login_required
-def index(): 
-    return render_template('index.html')
-
+# --- ROUTES API POUR LES EQUIPES ---
 @app.route('/api/my_teams', methods=['GET'])
 @login_required
 def get_my_teams():
+    club_id = session.get('club_id')
     try:
         with engine.connect() as conn:
-            teams = conn.execute(text("SELECT id, name FROM teams WHERE club_id = :cid ORDER BY name"), {"cid": session.get('club_id')}).fetchall()
+            teams = conn.execute(text("SELECT id, name FROM teams WHERE club_id = :cid ORDER BY name"), {"cid": club_id}).fetchall()
             return jsonify([{"id": t[0], "name": t[1]} for t in teams])
     except Exception as e:
         print("Erreur my_teams:", e)
@@ -92,6 +90,12 @@ def get_last_roster(team_id):
         print("Erreur last_roster:", e)
         return jsonify({"status": "error", "message": "Erreur BDD. Les colonnes manquent-elles ?"}), 200
 
+# --- MATCH EN DIRECT ---
+@app.route('/')
+@login_required
+def index(): 
+    return render_template('index.html')
+
 @app.route('/api/go_live', methods=['POST'])
 @login_required
 def go_live():
@@ -103,8 +107,8 @@ def go_live():
                 INSERT INTO matches (club_id, team_id, team_home, team_away, current_set, score_home, score_away, sets_home, sets_away, is_live, roster_home, roster_away)
                 VALUES (:cid, :tid, :th, :ta, :cs, :sh, :sa, :setsh, :setsa, TRUE, :rh, :ra) RETURNING id
             """), {
-                "cid": session.get('club_id'), "tid": data.get('teamId'), "th": data['homeName'], "ta": data['awayName'],
-                "cs": data['set'], "sh": data['scoreHome'], "sa": data['scoreAway'], "setsh": data['setsHome'], "setsa": data['setsAway'],
+                "cid": session.get('club_id'), "tid": data.get('teamId'), "th": data.get('homeName'), "ta": data.get('awayName'),
+                "cs": data.get('set', 1), "sh": data.get('scoreHome', 0), "sa": data.get('scoreAway', 0), "setsh": data.get('setsHome', 0), "setsa": data.get('setsAway', 0),
                 "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))
             })
             match_id = result.fetchone()[0]
@@ -122,7 +126,7 @@ def update_live():
         with engine.connect() as conn:
             trans = conn.begin()
             conn.execute(text("UPDATE matches SET current_set=:cs, score_home=:sh, score_away=:sa, sets_home=:setsh, sets_away=:setsa WHERE id=:mid"), 
-                         {"cs": data['set'], "sh": data['scoreHome'], "sa": data['scoreAway'], "setsh": data['setsHome'], "setsa": data['setsAway'], "mid": data['match_id']})
+                         {"cs": data.get('set', 1), "sh": data.get('scoreHome', 0), "sa": data.get('scoreAway', 0), "setsh": data.get('setsHome', 0), "setsa": data.get('setsAway', 0), "mid": data['match_id']})
             trans.commit()
             return jsonify({"status": "success"})
     except Exception: return jsonify({"status": "error"}), 200
@@ -137,16 +141,24 @@ def save_match():
             match_id = data.get('match_id')
             if match_id:
                 conn.execute(text("UPDATE matches SET sets_home=:sh, sets_away=:sa, winner=:w, is_live=FALSE, roster_home=:rh, roster_away=:ra WHERE id=:mid"), 
-                             {"sh": data['setsHome'], "sa": data['setsAway'], "w": data['winner'], "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {})), "mid": match_id})
+                             {"sh": data.get('setsHome', 0), "sa": data.get('setsAway', 0), "w": data.get('winner', ''), "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {})), "mid": match_id})
                 conn.execute(text("DELETE FROM points WHERE match_id = :mid"), {"mid": match_id})
             else:
                 result = conn.execute(text("INSERT INTO matches (club_id, team_id, team_home, team_away, sets_home, sets_away, winner, roster_home, roster_away) VALUES (:cid, :tid, :h, :a, :sh, :sa, :w, :rh, :ra) RETURNING id"), 
-                                      {"cid": session.get('club_id'), "tid": data.get('teamId'), "h": data['homeName'], "a": data['awayName'], "sh": data['setsHome'], "sa": data['setsAway'], "w": data['winner'], "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))})
+                                      {"cid": session.get('club_id'), "tid": data.get('teamId'), "h": data.get('homeName'), "a": data.get('awayName'), "sh": data.get('setsHome', 0), "sa": data.get('setsAway', 0), "w": data.get('winner', ''), "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))})
                 match_id = result.fetchone()[0]
 
-            if data['history']:
-                pts = [{"mid": match_id, "set": p['set'], "sh": p['score_dom'], "sa": p['score_ext'], "wp": p['winner_team'], "pt": p['point_type'], "act": p['action'], "pnum": str(p['actor_num']), "pteam": p['actor_team'], "snum": str(p['server_num']), "rh": p['rot_home'], "ra": p['rot_away'], "alicence": p.get('actor_licence', ''), "slicence": p.get('server_licence', ''), "rhl": p.get('rot_home_licences', ''), "ral": p.get('rot_away_licences', '')} for p in data['history']]
+            if data.get('history'):
+                pts = [{
+                    "mid": match_id, "set": p.get('set', 1), "sh": p.get('score_dom', 0), "sa": p.get('score_ext', 0), 
+                    "wp": p.get('winner_team', ''), "pt": p.get('point_type', ''), "act": p.get('action', ''), 
+                    "pnum": str(p.get('actor_num', '')), "pteam": p.get('actor_team', ''), "snum": str(p.get('server_num', '')), 
+                    "rh": p.get('rot_home', ''), "ra": p.get('rot_away', ''), "alicence": p.get('actor_licence', ''), 
+                    "slicence": p.get('server_licence', ''), "rhl": p.get('rot_home_licences', ''), "ral": p.get('rot_away_licences', '')
+                } for p in data['history']]
+                
                 conn.execute(text("INSERT INTO points (match_id, set_number, score_home, score_away, winner_point, point_type, action_type, player_num, player_team, server_num, rotation_home, rotation_away, player_licence, server_licence, rotation_home_licences, rotation_away_licences) VALUES (:mid, :set, :sh, :sa, :wp, :pt, :act, :pnum, :pteam, :snum, :rh, :ra, :alicence, :slicence, :rhl, :ral)"), pts)
+            
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
     except Exception as e:
@@ -253,7 +265,7 @@ def add_club():
                 conn.execute(text("INSERT INTO clubs (name) VALUES (:n)"), {"n": request.form.get('name')})
                 trans.commit()
                 flash("Club ajouté.", "success")
-        except: flash("Erreur", "error")
+        except: flash("Erreur: Club existant.", "error")
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/add_user', methods=['POST'])
@@ -267,7 +279,7 @@ def add_user():
                 conn.execute(text("INSERT INTO users (username, password_hash, role, club_id) VALUES (:u, :p, :r, :c)"), {"u": u, "p": generate_password_hash(p), "r": r, "c": c})
                 trans.commit()
                 flash("Utilisateur créé.", "success")
-        except: flash("Erreur", "error")
+        except: flash("Erreur: Pseudo pris.", "error")
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/add_team', methods=['POST'])
@@ -281,7 +293,7 @@ def add_team():
                 conn.execute(text("INSERT INTO teams (name, club_id) VALUES (:n, :c)"), {"n": n, "c": c})
                 trans.commit()
                 flash("Collectif ajouté.", "success")
-        except: flash("Erreur", "error")
+        except Exception as e: flash("Erreur lors de l'ajout.", "error")
     return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
