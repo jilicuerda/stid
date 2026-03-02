@@ -21,13 +21,13 @@
             <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Sélectionnez un match de votre club :</label>
             <div class="flex gap-4">
                 <select id="matchSelect" class="flex-1 border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-800 font-semibold focus:ring-blue-500">
-                    <option value="" disabled selected>Chargement des matchs...</option>
+                    <option value="" disabled selected>Chargement des matchs en cours...</option>
                 </select>
                 <button onclick="loadStats()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-md">
                     <span class="material-symbols-outlined">analytics</span> Analyser
                 </button>
             </div>
-            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Génération des graphiques en cours par le serveur...</p>
+            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">L'Intelligence Artificielle compile les statistiques... Veuillez patienter.</p>
         </div>
 
         <div id="statsContainer" class="hidden space-y-8">
@@ -47,20 +47,24 @@
             const sel = document.getElementById('matchSelect');
             try {
                 const res = await fetch('/api/completed_matches');
-                const matches = await res.json();
+                const data = await res.json();
                 
-                if (matches.length === 0) {
-                    sel.innerHTML = '<option value="" disabled selected>Aucun match enregistré pour votre club.</option>';
+                if (data.error) {
+                    sel.innerHTML = `<option value="" disabled selected>Erreur: ${data.error}</option>`;
+                    return;
+                }
+
+                if (data.length === 0) {
+                    sel.innerHTML = '<option value="" disabled selected>Aucun match enregistré pour ce club.</option>';
                     return;
                 }
 
                 sel.innerHTML = '<option value="" disabled selected>Choisissez un match enregistré...</option>';
-                matches.forEach(m => {
+                data.forEach(m => {
                     sel.innerHTML += `<option value="${m.id}">${m.title}</option>`;
                 });
             } catch (e) {
-                sel.innerHTML = '<option value="" disabled selected>Erreur de chargement. Veuillez rafraîchir.</option>';
-                console.error("Erreur de chargement de la liste :", e);
+                sel.innerHTML = '<option value="" disabled selected>Erreur de communication avec le serveur.</option>';
             }
         });
 
@@ -76,7 +80,7 @@
                 const data = await res.json();
 
                 if (data.error) {
-                    alert(data.error);
+                    alert("Erreur: " + data.error);
                     document.getElementById('loadingMsg').classList.add('hidden');
                     return;
                 }
@@ -86,6 +90,23 @@
                 zone.innerHTML = '';
 
                 data.sets.forEach(s => {
+                    
+                    // Génération du tableau d'efficacité pour l'équipe Domicile
+                    let effHomeHTML = '';
+                    let totHomeM = 0, totHomeE = 0, totHomeD = 0;
+                    s.eff_home.forEach(row => {
+                        totHomeM += row.m; totHomeE += row.e; totHomeD += row.d;
+                        effHomeHTML += `<tr><td class="p-2 border-b font-bold text-blue-600">N°${row.num}</td><td class="p-2 border-b text-center text-green-600 font-semibold">${row.m}</td><td class="p-2 border-b text-center text-red-500 font-semibold">${row.e}</td><td class="p-2 border-b text-center font-black ${row.d > 0 ? 'text-green-600' : (row.d < 0 ? 'text-red-500' : 'text-gray-500')}">${row.d > 0 ? '+'+row.d : row.d}</td></tr>`;
+                    });
+
+                    // Génération du tableau d'efficacité pour l'équipe Extérieure
+                    let effAwayHTML = '';
+                    let totAwayM = 0, totAwayE = 0, totAwayD = 0;
+                    s.eff_away.forEach(row => {
+                        totAwayM += row.m; totAwayE += row.e; totAwayD += row.d;
+                        effAwayHTML += `<tr><td class="p-2 border-b font-bold text-orange-500">N°${row.num}</td><td class="p-2 border-b text-center text-green-600 font-semibold">${row.m}</td><td class="p-2 border-b text-center text-red-500 font-semibold">${row.e}</td><td class="p-2 border-b text-center font-black ${row.d > 0 ? 'text-green-600' : (row.d < 0 ? 'text-red-500' : 'text-gray-500')}">${row.d > 0 ? '+'+row.d : row.d}</td></tr>`;
+                    });
+
                     zone.innerHTML += `
                         <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
                             <div class="flex justify-between items-center mb-6 border-b pb-4">
@@ -94,13 +115,55 @@
                             </div>
                             
                             <div class="mb-8">
-                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Séquences de Points (Duel)</h4>
+                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4"><span class="material-symbols-outlined text-sm align-middle">bar_chart</span> Séquences de Points (Duel)</h4>
                                 ${s.graph_duel ? `<img src="data:image/png;base64,${s.graph_duel}" class="w-full rounded-xl border border-gray-100 shadow-sm">` : '<p class="text-red-500 italic">Erreur de génération du duel.</p>'}
                             </div>
 
-                            <div>
-                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4">Rotation de départ du set</h4>
+                            <div class="mb-8">
+                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4"><span class="material-symbols-outlined text-sm align-middle">sports_volleyball</span> Rotation de départ du set</h4>
                                 ${s.graph_rot ? `<img src="data:image/png;base64,${s.graph_rot}" class="w-full max-w-3xl mx-auto block rounded-xl border border-gray-100 shadow-sm">` : '<p class="text-red-500 italic">Erreur de génération du terrain.</p>'}
+                            </div>
+
+                            <div>
+                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4"><span class="material-symbols-outlined text-sm align-middle">troubleshoot</span> Analyse d'efficacité sur Service</h4>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    
+                                    <div class="border border-blue-200 rounded-xl overflow-hidden">
+                                        <div class="bg-blue-50 text-blue-800 font-bold p-3 text-center border-b border-blue-200">Notre Équipe (Bleu)</div>
+                                        <table class="w-full text-sm bg-white">
+                                            <thead>
+                                                <tr class="bg-gray-50 text-gray-500 uppercase text-[10px]">
+                                                    <th class="p-2 text-left">Serveur</th><th class="p-2">Pts Marqués</th><th class="p-2">Pts Encaissés</th><th class="p-2">Différence</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>${effHomeHTML}</tbody>
+                                            <tfoot>
+                                                <tr class="bg-blue-50/50 font-bold text-blue-900 border-t-2 border-blue-200">
+                                                    <td class="p-2">TOTAL</td><td class="p-2 text-center">${totHomeM}</td><td class="p-2 text-center">${totHomeE}</td><td class="p-2 text-center">${totHomeD > 0 ? '+'+totHomeD : totHomeD}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+
+                                    <div class="border border-orange-200 rounded-xl overflow-hidden">
+                                        <div class="bg-orange-50 text-orange-800 font-bold p-3 text-center border-b border-orange-200">Adversaire (Orange)</div>
+                                        <table class="w-full text-sm bg-white">
+                                            <thead>
+                                                <tr class="bg-gray-50 text-gray-500 uppercase text-[10px]">
+                                                    <th class="p-2 text-left">Serveur</th><th class="p-2">Pts Marqués</th><th class="p-2">Pts Encaissés</th><th class="p-2">Différence</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>${effAwayHTML}</tbody>
+                                            <tfoot>
+                                                <tr class="bg-orange-50/50 font-bold text-orange-900 border-t-2 border-orange-200">
+                                                    <td class="p-2">TOTAL</td><td class="p-2 text-center">${totAwayM}</td><td class="p-2 text-center">${totAwayE}</td><td class="p-2 text-center">${totAwayD > 0 ? '+'+totAwayD : totAwayD}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+
+                                </div>
                             </div>
                         </div>
                     `;
@@ -109,8 +172,7 @@
                 document.getElementById('statsContainer').classList.remove('hidden');
 
             } catch (e) {
-                alert("Erreur réseau lors de la récupération des statistiques.");
-                console.error(e);
+                alert("Erreur de connexion lors du téléchargement des graphiques.");
             } finally {
                 document.getElementById('loadingMsg').classList.add('hidden');
             }
