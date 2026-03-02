@@ -6,7 +6,10 @@ from flask_cors import CORS
 from sqlalchemy import create_engine, text
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
+
+# Imports des moteurs
 from pdf_engine import process_pdf_for_web
+from stats_engine import generate_duel_graph, generate_rotation_graph
 
 app = Flask(__name__)
 CORS(app)
@@ -170,6 +173,7 @@ def save_match():
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
     except Exception as e:
+        print(f"ERREUR SAUVEGARDE : {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/live')
@@ -189,6 +193,7 @@ def live_matches_api():
         result = [{"id": m[0], "team_home": m[1], "team_away": m[2], "current_set": m[3], "score_home": m[4], "score_away": m[5], "sets_home": m[6], "sets_away": m[7]} for m in matches]
     return jsonify(result)
 
+# --- ROUTES EXTRACTION PDF ---
 @app.route('/extraction')
 @login_required
 def extraction_page(): return render_template('extraction.html')
@@ -223,6 +228,78 @@ def save_pdf_report():
             return jsonify({"status": "success", "message": "Sauvegardé !"})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
+# ======================================================================
+# ROUTES POUR LES STATISTIQUES (SÉCURISÉ CONTRE LES ERREURS 500)
+# ======================================================================
+@app.route('/stats')
+@login_required
+def stats_page():
+    return render_template('stats.html')
+
+@app.route('/api/completed_matches')
+@login_required
+def get_completed_matches():
+    club_id = session.get('club_id')
+    with engine.connect() as conn:
+        matches = conn.execute(text("""
+            SELECT id, team_home, team_away, created_at, winner 
+            FROM matches 
+            WHERE club_id = :cid 
+            ORDER BY created_at DESC
+        """), {"cid": club_id}).fetchall()
+        result = [{"id": m[0], "title": f"{m[1]} vs {m[2]} ({m[3].strftime('%d/%m/%Y')}) - Gagnant: {m[4]}"} for m in matches]
+        return jsonify(result)
+
+@app.route('/api/match_stats/<int:match_id>')
+@login_required
+def get_match_stats(match_id):
+    try:
+        with engine.connect() as conn:
+            match_info = conn.execute(text("SELECT team_home, team_away FROM matches WHERE id = :mid"), {"mid": match_id}).fetchone()
+            if not match_info: return jsonify({"error": "Match non trouvé"}), 404
+            
+            team_home, team_away = match_info[0], match_info[1]
+            
+            points = conn.execute(text("""
+                SELECT set_number, score_home, score_away, server_team, server_num, rotation_home, rotation_away 
+                FROM points WHERE match_id = :mid ORDER BY id ASC
+            """), {"mid": match_id}).fetchall()
+            
+            # PROTECTION ERREUR 500: Si le match a été créé mais sans aucun point
+            if not points or len(points) == 0:
+                return jsonify({"error": "Ce match ne contient aucun point. Impossible de générer les graphiques."}), 400
+                
+            sets_data = {}
+            for p in points:
+                set_num = p[0]
+                if set_num not in sets_data: sets_data[set_num] = []
+                sets_data[set_num].append({
+                    "score_home": p[1], "score_away": p[2], 
+                    "server_team": p[3], "server_num": p[4],
+                    "rotation_home": p[5], "rotation_away": p[6]
+                })
+                
+            graphs_payload = []
+            for set_num, pts in sets_data.items():
+                if not pts: continue
+                duel_b64 = generate_duel_graph(pts, team_home, team_away, set_num)
+                rot_b64 = generate_rotation_graph(pts, team_home, team_away)
+                
+                score_final = f"{pts[-1]['score_home']} - {pts[-1]['score_away']}"
+                
+                graphs_payload.append({
+                    "set": set_num, "score": score_final,
+                    "graph_duel": duel_b64, "graph_rot": rot_b64
+                })
+                
+            return jsonify({"match_title": f"{team_home} vs {team_away}", "sets": graphs_payload})
+            
+    except Exception as e:
+        print(f"ERREUR GENERATION STATS : {e}")
+        # Au lieu de faire crasher le site (500), on renvoie proprement l'erreur à l'écran du joueur
+        return jsonify({"error": f"Le moteur graphique a rencontré un problème avec les données de ce match. Détails : {str(e)}"}), 500
+
+# --- ROUTES ADMINISTRATION ---
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
