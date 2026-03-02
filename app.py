@@ -70,17 +70,25 @@ def get_my_teams():
 @app.route('/api/last_roster/<int:team_id>', methods=['GET'])
 @login_required
 def get_last_roster(team_id):
-    with engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT roster_home, team_home 
-            FROM matches 
-            WHERE team_id = :tid AND roster_home IS NOT NULL 
-            ORDER BY created_at DESC LIMIT 1
-        """), {"tid": team_id}).fetchone()
-        
-        if result:
-            return jsonify({"status": "success", "roster": result[0], "last_team_name": result[1]})
-        return jsonify({"status": "empty"})
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT roster_home, team_home 
+                FROM matches 
+                WHERE team_id = :tid AND roster_home IS NOT NULL 
+                ORDER BY created_at DESC LIMIT 1
+            """), {"tid": team_id}).fetchone()
+            
+            if result:
+                roster_data = result[0]
+                # SQLAlchemy peut renvoyer directement un dict (si type JSONB) ou un string.
+                if isinstance(roster_data, str):
+                    roster_data = json.loads(roster_data)
+                return jsonify({"status": "success", "roster": roster_data, "last_team_name": result[1]})
+            return jsonify({"status": "empty"})
+    except Exception as e:
+        print(f"Erreur last_roster: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # --- MATCH EN DIRECT ---
 @app.route('/')
@@ -229,7 +237,7 @@ def save_pdf_report():
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
 # ======================================================================
-# ROUTES POUR LES STATISTIQUES (SÉCURISÉ CONTRE LES ERREURS 500)
+# ROUTES POUR LES STATISTIQUES 
 # ======================================================================
 @app.route('/stats')
 @login_required
@@ -265,7 +273,6 @@ def get_match_stats(match_id):
                 FROM points WHERE match_id = :mid ORDER BY id ASC
             """), {"mid": match_id}).fetchall()
             
-            # PROTECTION ERREUR 500: Si le match a été créé mais sans aucun point
             if not points or len(points) == 0:
                 return jsonify({"error": "Ce match ne contient aucun point. Impossible de générer les graphiques."}), 400
                 
@@ -296,8 +303,7 @@ def get_match_stats(match_id):
             
     except Exception as e:
         print(f"ERREUR GENERATION STATS : {e}")
-        # Au lieu de faire crasher le site (500), on renvoie proprement l'erreur à l'écran du joueur
-        return jsonify({"error": f"Le moteur graphique a rencontré un problème avec les données de ce match. Détails : {str(e)}"}), 500
+        return jsonify({"error": f"Le moteur graphique a rencontré un problème. Détails : {str(e)}"}), 500
 
 # --- ROUTES ADMINISTRATION ---
 @app.route('/admin')
