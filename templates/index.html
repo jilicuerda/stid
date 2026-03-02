@@ -20,49 +20,6 @@
 </head>
 <body class="bg-bg-light dark:bg-bg-dark font-display text-[#111318] dark:text-white min-h-screen flex flex-col select-none">
 
-    <script>
-        class VolleyMatch {
-            constructor() { this.resetState(); }
-            resetState() {
-                this.state = { home: { name: "Home", score: 0, sets: 0, players: [], onCourt: [] }, away: { name: "Away", score: 0, sets: 0, players: [], onCourt: [] }, server: null, set: 1, history: [], isStarted: false, tempPoint: { winner: null, actorTeam: null, actorNum: null }, subTarget: { team: null, idx: null } };
-            }
-            initializeMatch(hName, aName, serv, hRoster, hCourt, aRoster, aCourt) {
-                this.state.home.name = hName; this.state.home.players = hRoster; this.state.home.onCourt = hCourt;
-                this.state.away.name = aName; this.state.away.players = aRoster; this.state.away.onCourt = aCourt;
-                this.state.server = serv; this.state.set = 1; this.state.history = []; this.state.isStarted = false;
-            }
-            startScoring() { this.state.isStarted = true; }
-            scorePoint(winner, details) {
-                const sTeam = this.state.server; 
-                const sPlayer = this.state[sTeam].onCourt[0]; // Le serveur
-                const actor = details.actorTeam ? this.state[details.actorTeam].onCourt.find(p => p.num == details.actorNum) : null;
-                
-                this.state[winner].score++;
-                
-                this.state.history.push({
-                    set: this.state.set, score_dom: this.state.home.score, score_ext: this.state.away.score, 
-                    winner_team: this.state[winner].name, action: details.action, 
-                    actor_num: details.actorNum, 
-                    actor_licence: actor ? actor.licence : '', // NOUVEAU: Licence
-                    server_team: this.state[sTeam].name, 
-                    server_num: sPlayer.num, 
-                    server_licence: sPlayer.licence || '',     // NOUVEAU: Licence serveur
-                    rot_home: this.state.home.onCourt.map(p=>p.num).join('-'), 
-                    rot_home_licences: this.state.home.onCourt.map(p=>p.licence || '?').join('-'), // NOUVEAU
-                    rot_away: this.state.away.onCourt.map(p=>p.num).join('-'),
-                    rot_away_licences: this.state.away.onCourt.map(p=>p.licence || '?').join('-')  // NOUVEAU
-                });
-                if(this.state.server !== winner) { this.rotate(winner); this.state.server = winner; }
-            }
-            rotate(team) { const s = this.state[team].onCourt; s.push(s.shift()); }
-            substitute(team, idx, num) { const p = this.state[team].players.find(x => x.num == num); if(p) this.state[team].onCourt[idx] = p; }
-            swapPositions(team, idx1, idx2) { const temp = this.state[team].onCourt[idx1]; this.state[team].onCourt[idx1] = this.state[team].onCourt[idx2]; this.state[team].onCourt[idx2] = temp; }
-            endSet() { (this.state.home.score > this.state.away.score) ? this.state.home.sets++ : this.state.away.sets++; this.state.set++; this.state.home.score = 0; this.state.away.score = 0; return true; }
-            generateBackupJSON() { return "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state)); }
-            loadFromJSON(json) { try { this.state = JSON.parse(json); return true; } catch(e) { return false; } }
-        }
-    </script>
-
     <div id="setupModal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center backdrop-blur-sm overflow-y-auto pt-10 pb-10">
         <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-4xl w-full mx-4 shadow-2xl border border-gray-700 my-auto">
             <div id="stepLoad" class="text-center">
@@ -164,8 +121,11 @@
         <div class="flex items-center gap-2">
             <button onclick="startNewGame()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-bold hover:bg-gray-100 transition mr-2"><span class="material-symbols-outlined text-sm">add_box</span> <span class="hidden lg:inline">Nouveau</span></button>
             <button id="btnGoLive" onclick="toggleLive()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-bold hover:bg-red-50 transition"><span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">Go Live</span></button>
+            
+            <a href="/stats" target="_blank" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-800 text-sm font-bold hover:bg-blue-200 transition"><span class="material-symbols-outlined text-sm">query_stats</span> <span class="hidden xl:inline">Stats</span></a>
             <a href="/live" target="_blank" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-100 text-green-700 text-sm font-bold hover:bg-green-200 transition"><span class="material-symbols-outlined text-sm">live_tv</span> <span class="hidden lg:inline">Vue Spectateur</span></a>
             <a href="/extraction" target="_blank" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-purple-100 text-purple-700 text-sm font-bold hover:bg-purple-200 transition"><span class="material-symbols-outlined text-sm">document_scanner</span></a>
+            
             <button onclick="switchSides()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-bold border border-gray-300 hover:bg-gray-200"><span class="material-symbols-outlined text-sm">swap_horiz</span></button>
             <button onclick="sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm hover:bg-blue-700"><span class="material-symbols-outlined text-sm">cloud_upload</span> <span class="hidden sm:inline">Sync Fin</span></button>
         </div>
@@ -209,6 +169,21 @@
     </div>
 
     <script>
+        // Déclaration globale des variables et constantes
+        let game = new VolleyMatch();
+        let isHomeLeft = true; 
+        let swapSelection = null; 
+        let currentLiveMatchId = null;
+
+        const POS_LEFT = [{ x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }, { x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }];
+        const POS_RIGHT = [{ x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }, { x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }];
+
+        // Définition propre de toutes les fonctions
+        function showStep(id) { 
+            ['stepLoad', 'step1', 'step2'].forEach(s => document.getElementById(s).classList.add('hidden')); 
+            document.getElementById(id).classList.remove('hidden'); 
+        }
+
         function setSyncStatus(status) {
             const icon = document.getElementById('syncIcon'); const text = document.getElementById('syncText');
             if(status === 'syncing') { icon.innerText = 'cloud_sync'; icon.className = 'material-symbols-outlined text-sm text-blue-500 animate-spin'; text.innerText = 'Envoi...'; }
@@ -241,7 +216,7 @@
                     const savedRoster = JSON.parse(data.roster);
                     if(savedRoster.all && savedRoster.all.length > 0) {
                         savedRoster.all.forEach((p, idx) => {
-                            addPlayerRow('home', idx); // Force l'index pour éviter les sauts
+                            addPlayerRow('home', idx); 
                             document.getElementById(`home_licence_${idx}`).value = p.licence && p.licence !== '?' ? p.licence : '';
                             document.getElementById(`home_num_${idx}`).value = p.num !== '?' ? p.num : '';
                             document.getElementById(`home_name_${idx}`).value = p.name !== '?' ? p.name : '';
@@ -259,19 +234,13 @@
             if(document.getElementById('awayRosterList').innerHTML === "") for(let i=0; i<8; i++) addPlayerRow('away');
         }
 
-        // CORRECTION DU BUG + AJOUT LICENCE : L'index est calculé dynamiquement
         function addPlayerRow(team, forceIdx = null) {
             const c = document.getElementById(team + 'RosterList'); 
-            const idx = forceIdx !== null ? forceIdx : c.children.length; // Compte le nombre actuel d'enfants
+            const idx = forceIdx !== null ? forceIdx : c.children.length; 
             const d = document.createElement('div'); d.className = "flex gap-1 items-center mb-2";
             
             let html = `<span class="text-[10px] font-bold w-4 text-gray-400">${idx+1}</span>`;
-            
-            // Champ Licence uniquement pour NOUS
-            if(team === 'home') {
-                html += `<input type="text" id="home_licence_${idx}" placeholder="Licence" class="w-[85px] p-1 text-sm border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400">`;
-            }
-            
+            if(team === 'home') { html += `<input type="text" id="home_licence_${idx}" placeholder="Licence" class="w-[85px] p-1 text-sm border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400">`; }
             html += `<input type="number" id="${team}_num_${idx}" placeholder="N°" class="w-12 p-1 text-sm border border-gray-300 rounded bg-white text-gray-900 placeholder-gray-400">`;
             
             if(team === 'home') {
@@ -283,7 +252,6 @@
             d.innerHTML = html; c.appendChild(d);
         }
 
-        // NOUVEL ORDRE EXCEL : Licence | Nom | Prénom | Num | Role
         function importHomeTeamFromExcel(input) {
             const file = input.files[0]; if(!file) return; const r = new FileReader();
             r.onload = function(e) {
@@ -292,13 +260,13 @@
                 document.getElementById('homeRosterList').innerHTML = ""; let count = 0;
                 
                 rows.forEach(row => {
-                    const num = row[3]; // Numéro est maintenant en colonne 3 (D)
+                    const num = row[3]; 
                     if (num && !isNaN(num)) {
                         addPlayerRow('home', count);
-                        document.getElementById(`home_licence_${count}`).value = row[0] || ''; // Licence (A)
-                        document.getElementById(`home_name_${count}`).value = `${row[2]||''} ${row[1]||''}`.trim(); // Prenom Nom (C B)
+                        document.getElementById(`home_licence_${count}`).value = row[0] || ''; 
+                        document.getElementById(`home_name_${count}`).value = `${row[2]||''} ${row[1]||''}`.trim(); 
                         document.getElementById(`home_num_${count}`).value = num;
-                        document.getElementById(`home_role_${count}`).value = mapExcelRole(row[4]); // Role (E)
+                        document.getElementById(`home_role_${count}`).value = mapExcelRole(row[4]); 
                         count++;
                     }
                 }); alert(`${count} joueurs importés !`);
@@ -321,10 +289,7 @@
                     let num = document.getElementById(`${team}_num_${i}`).value;
                     let nameEl = document.getElementById(`${team}_name_${i}`); let name = nameEl ? nameEl.value : 'Adv#'+num;
                     let roleEl = document.getElementById(`${team}_role_${i}`); let role = roleEl ? roleEl.value : '?';
-                    
-                    // NOUVEAU: Récupération de la licence
-                    let licenceEl = document.getElementById(`${team}_licence_${i}`); 
-                    let licence = licenceEl ? licenceEl.value : '';
+                    let licenceEl = document.getElementById(`${team}_licence_${i}`); let licence = licenceEl ? licenceEl.value : '';
 
                     if(num) { let p = { num, name: name || 'J'+num, role, id: i, licence: licence }; roster.push(p); if(i < 6) starters.push(p); }
                 }
