@@ -2,70 +2,111 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Analyse & Stats - VolleyLive</title>
+    <title>Analyse Globale & Stats - VolleyLive</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700;900&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-    <style>body { font-family: 'Lexend', sans-serif; }</style>
+    <style>
+        body { font-family: 'Lexend', sans-serif; }
+        .bg-gradient-blue { background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%); }
+        .bg-gradient-orange { background: linear-gradient(90deg, #fff7ed 0%, #ffedd5 100%); }
+    </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-100 min-h-screen">
     
-    <header class="bg-blue-800 text-white p-4 shadow-md flex justify-between items-center">
-        <h1 class="text-xl font-bold flex items-center gap-2"><span class="material-symbols-outlined">query_stats</span> Analyse de Match</h1>
-        <a href="/" class="bg-blue-900 px-4 py-2 rounded-lg font-bold hover:bg-blue-950 transition">Retour au Live</a>
+    <header class="bg-slate-900 text-white p-4 shadow-xl flex justify-between items-center sticky top-0 z-50">
+        <h1 class="text-xl font-black flex items-center gap-2 tracking-widest"><span class="material-symbols-outlined text-blue-500">query_stats</span> DATA SCOUTING</h1>
+        <a href="/" class="bg-slate-800 px-4 py-2 rounded-lg font-bold hover:bg-slate-700 transition text-sm">Retour Console</a>
     </header>
 
-    <main class="max-w-6xl mx-auto mt-8 p-4">
+    <main class="max-w-7xl mx-auto mt-8 p-4">
         
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-8">
-            <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Sélectionnez un match de votre club :</label>
+            <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-wide">Analyser un match :</label>
             <div class="flex gap-4">
-                <select id="matchSelect" class="flex-1 border border-gray-300 rounded-lg p-3 bg-gray-50 text-gray-800 font-semibold focus:ring-blue-500">
-                    <option value="" disabled selected>Chargement des matchs en cours...</option>
+                <select id="matchSelect" class="flex-1 border-2 border-slate-200 rounded-xl p-3 bg-slate-50 text-slate-800 font-bold focus:ring-blue-500 outline-none">
+                    <option value="" disabled selected>Chargement...</option>
                 </select>
-                <button onclick="loadStats()" class="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-md">
-                    <span class="material-symbols-outlined">analytics</span> Analyser
+                <button onclick="loadStats()" class="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg">
+                    <span class="material-symbols-outlined">magic_button</span> Générer le Rapport
                 </button>
             </div>
-            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">L'Intelligence Artificielle compile les statistiques... Veuillez patienter.</p>
+            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Extraction et compilation des données en cours...</p>
         </div>
 
-        <div id="statsContainer" class="hidden space-y-8">
-            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 text-center">
-                <h2 id="matchTitleDisplay" class="text-3xl font-black text-gray-800">Titre du match</h2>
-            </div>
+        <div id="statsContainer" class="hidden space-y-12">
+            <h2 id="matchTitleDisplay" class="text-4xl font-black text-slate-800 text-center my-10 uppercase tracking-tight"></h2>
             
-            <div id="setsGraphsZone" class="space-y-8">
+            <section class="space-y-8">
+                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">group</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">1. Statistiques Individuelles</h3></div>
+                
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    <div class="bg-white rounded-2xl shadow-lg border-t-8 border-blue-500 overflow-hidden">
+                        <div class="bg-gradient-blue p-4 font-black text-blue-900 uppercase tracking-widest text-center" id="titleIndivHome"></div>
+                        <div class="overflow-x-auto p-4">
+                            <table class="w-full text-sm text-center">
+                                <thead class="text-[10px] text-gray-500 border-b-2 border-blue-200">
+                                    <tr><th class="p-2 text-left">N° / Licence</th><th class="p-2">PTS</th><th class="p-2">Att</th><th class="p-2">Blk</th><th class="p-2">Ace</th><th class="p-2">Feinte</th><th class="p-2">Serv (Réussite)</th></tr>
+                                </thead>
+                                <tbody id="tableIndivHome" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-lg border-t-8 border-orange-500 overflow-hidden">
+                        <div class="bg-gradient-orange p-4 font-black text-orange-900 uppercase tracking-widest text-center" id="titleIndivAway"></div>
+                        <div class="overflow-x-auto p-4">
+                            <table class="w-full text-sm text-center">
+                                <thead class="text-[10px] text-gray-500 border-b-2 border-orange-200">
+                                    <tr><th class="p-2 text-left">N°</th><th class="p-2">PTS</th><th class="p-2">Att</th><th class="p-2">Blk</th><th class="p-2">Ace</th><th class="p-2">Feinte</th><th class="p-2">Serv (Réussite)</th></tr>
+                                </thead>
+                                <tbody id="tableIndivAway" class="divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-        </div>
+            </section>
 
+            <section class="space-y-8">
+                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">rotate_right</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">2. Efficacité Globale par Rotation</h3></div>
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+                        <div class="bg-slate-100 p-3 font-bold text-slate-700 text-center text-sm border-b" id="titleRotHome"></div>
+                        <table class="w-full text-sm text-center">
+                            <thead class="text-[10px] bg-slate-50 text-slate-500 border-b">
+                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Marqués<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2">Encaissés<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2 font-black text-blue-600">DIFF</th></tr>
+                            </thead>
+                            <tbody id="tableRotHome" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+                        <div class="bg-slate-100 p-3 font-bold text-slate-700 text-center text-sm border-b" id="titleRotAway"></div>
+                        <table class="w-full text-sm text-center">
+                            <thead class="text-[10px] bg-slate-50 text-slate-500 border-b">
+                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Marqués<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2">Encaissés<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2 font-black text-orange-600">DIFF</th></tr>
+                            </thead>
+                            <tbody id="tableRotAway" class="divide-y divide-gray-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section class="space-y-8" id="setsGraphsZone">
+                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">insert_chart</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">3. Analyse Chronologique des Sets</h3></div>
+                </section>
+        </div>
     </main>
 
     <script>
-        // Charger la liste des matchs au démarrage
         document.addEventListener("DOMContentLoaded", async () => {
             const sel = document.getElementById('matchSelect');
             try {
                 const res = await fetch('/api/completed_matches');
                 const data = await res.json();
-                
-                if (data.error) {
-                    sel.innerHTML = `<option value="" disabled selected>Erreur: ${data.error}</option>`;
-                    return;
-                }
-
-                if (data.length === 0) {
-                    sel.innerHTML = '<option value="" disabled selected>Aucun match enregistré pour ce club.</option>';
-                    return;
-                }
-
-                sel.innerHTML = '<option value="" disabled selected>Choisissez un match enregistré...</option>';
-                data.forEach(m => {
-                    sel.innerHTML += `<option value="${m.id}">${m.title}</option>`;
-                });
-            } catch (e) {
-                sel.innerHTML = '<option value="" disabled selected>Erreur de communication avec le serveur.</option>';
-            }
+                if (data.error) { sel.innerHTML = `<option value="" disabled selected>Erreur</option>`; return; }
+                if (data.length === 0) { sel.innerHTML = '<option value="" disabled selected>Aucun match trouvé</option>'; return; }
+                sel.innerHTML = '<option value="" disabled selected>Choisissez un match...</option>';
+                data.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.title}</option>`);
+            } catch (e) {}
         });
 
         async function loadStats() {
@@ -78,92 +119,67 @@
             try {
                 const res = await fetch(`/api/match_stats/${matchId}`);
                 const data = await res.json();
-
-                if (data.error) {
-                    alert("Erreur: " + data.error);
-                    document.getElementById('loadingMsg').classList.add('hidden');
-                    return;
-                }
+                if (data.error) { alert(data.error); document.getElementById('loadingMsg').classList.add('hidden'); return; }
 
                 document.getElementById('matchTitleDisplay').innerText = data.match_title;
+                
+                // 1. STATS INDIVIDUELLES
+                document.getElementById('titleIndivHome').innerText = data.team_home;
+                document.getElementById('titleIndivAway').innerText = data.team_away;
+                
+                const buildIndivRow = (r, isHome) => {
+                    const colorScore = isHome ? 'bg-blue-100 text-blue-900' : 'bg-orange-100 text-orange-900';
+                    return `<tr>
+                        <td class="p-3 text-left">
+                            <span class="font-black text-lg">${r.num}</span>
+                            ${isHome ? `<br><span class="text-[10px] text-gray-400 font-mono tracking-tighter">${r.licence}</span>` : ''}
+                        </td>
+                        <td class="p-3 font-black text-lg ${colorScore} rounded-lg">${r.Pts}</td>
+                        <td class="p-3 text-gray-600 font-semibold">${r.Att}</td>
+                        <td class="p-3 text-gray-600 font-semibold">${r.Bloc}</td>
+                        <td class="p-3"><span class="font-bold text-gray-800">${r.Ace}</span><br><span class="text-[10px] text-green-600">${r.ace_pct}%</span></td>
+                        <td class="p-3 text-gray-600 font-semibold">${r.Feinte}</td>
+                        <td class="p-3"><span class="font-bold text-gray-800">${r.Serv_T}</span><br><span class="text-[10px] ${r.srv_pct > 50 ? 'text-green-600' : 'text-red-500'}">${r.srv_pct}%</span></td>
+                    </tr>`;
+                };
+                
+                document.getElementById('tableIndivHome').innerHTML = data.stats_indiv_h.map(r => buildIndivRow(r, True)).join('');
+                document.getElementById('tableIndivAway').innerHTML = data.stats_indiv_a.map(r => buildIndivRow(r, False)).join('');
+
+                // 2. STATS ROTATIONS GLOBALES
+                document.getElementById('titleRotHome').innerText = data.team_home;
+                document.getElementById('titleRotAway').innerText = data.team_away;
+
+                const buildRotRow = (r) => {
+                    const diffColor = r.diff > 0 ? 'text-green-600 bg-green-50' : (r.diff < 0 ? 'text-red-500 bg-red-50' : 'text-gray-500 bg-gray-50');
+                    const diffSign = r.diff > 0 ? '+'+r.diff : r.diff;
+                    return `<tr>
+                        <td class="p-3 text-left font-mono text-xs tracking-widest text-slate-500 bg-slate-50 border-r">${r.key}</td>
+                        <td class="p-3 font-bold text-slate-700">${r.ms + r.mr} <span class="text-[10px] font-normal text-slate-400">(${r.ms}/${r.mr})</span></td>
+                        <td class="p-3 font-bold text-slate-700">${r.es + r.er} <span class="text-[10px] font-normal text-slate-400">(${r.es}/${r.er})</span></td>
+                        <td class="p-3 font-black text-lg ${diffColor} rounded-r-lg border-l">${diffSign}</td>
+                    </tr>`;
+                };
+
+                document.getElementById('tableRotHome').innerHTML = data.eff_rot_h.map(r => buildRotRow(r)).join('');
+                document.getElementById('tableRotAway').innerHTML = data.eff_rot_a.map(r => buildRotRow(r)).join('');
+
+                // 3. GRAPHIQUES PAR SETS
                 const zone = document.getElementById('setsGraphsZone');
                 zone.innerHTML = '';
-
                 data.sets.forEach(s => {
-                    
-                    // Génération du tableau d'efficacité pour l'équipe Domicile
-                    let effHomeHTML = '';
-                    let totHomeM = 0, totHomeE = 0, totHomeD = 0;
-                    s.eff_home.forEach(row => {
-                        totHomeM += row.m; totHomeE += row.e; totHomeD += row.d;
-                        effHomeHTML += `<tr><td class="p-2 border-b font-bold text-blue-600">N°${row.num}</td><td class="p-2 border-b text-center text-green-600 font-semibold">${row.m}</td><td class="p-2 border-b text-center text-red-500 font-semibold">${row.e}</td><td class="p-2 border-b text-center font-black ${row.d > 0 ? 'text-green-600' : (row.d < 0 ? 'text-red-500' : 'text-gray-500')}">${row.d > 0 ? '+'+row.d : row.d}</td></tr>`;
-                    });
-
-                    // Génération du tableau d'efficacité pour l'équipe Extérieure
-                    let effAwayHTML = '';
-                    let totAwayM = 0, totAwayE = 0, totAwayD = 0;
-                    s.eff_away.forEach(row => {
-                        totAwayM += row.m; totAwayE += row.e; totAwayD += row.d;
-                        effAwayHTML += `<tr><td class="p-2 border-b font-bold text-orange-500">N°${row.num}</td><td class="p-2 border-b text-center text-green-600 font-semibold">${row.m}</td><td class="p-2 border-b text-center text-red-500 font-semibold">${row.e}</td><td class="p-2 border-b text-center font-black ${row.d > 0 ? 'text-green-600' : (row.d < 0 ? 'text-red-500' : 'text-gray-500')}">${row.d > 0 ? '+'+row.d : row.d}</td></tr>`;
-                    });
-
                     zone.innerHTML += `
-                        <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
-                            <div class="flex justify-between items-center mb-6 border-b pb-4">
-                                <h3 class="text-2xl font-bold text-gray-800">Set ${s.set}</h3>
-                                <span class="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-black text-xl border border-gray-300">Score: ${s.score}</span>
-                            </div>
+                        <div class="bg-white p-8 rounded-3xl shadow-lg border border-slate-200 relative overflow-hidden">
+                            <div class="absolute top-0 left-0 bg-slate-800 text-white px-6 py-2 rounded-br-3xl font-black tracking-widest uppercase text-sm">Set ${s.set}</div>
+                            <div class="absolute top-4 right-6 bg-slate-100 text-slate-800 px-6 py-2 rounded-xl border-2 border-slate-300 font-black text-2xl">${s.score}</div>
                             
-                            <div class="mb-8">
-                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4"><span class="material-symbols-outlined text-sm align-middle">bar_chart</span> Séquences de Points (Duel)</h4>
-                                ${s.graph_duel ? `<img src="data:image/png;base64,${s.graph_duel}" class="w-full rounded-xl border border-gray-100 shadow-sm">` : '<p class="text-red-500 italic">Erreur de génération du duel.</p>'}
+                            <div class="mt-12 mb-10">
+                                ${s.graph_duel ? `<img src="data:image/png;base64,${s.graph_duel}" class="w-full rounded-2xl shadow-sm border border-slate-100">` : ''}
                             </div>
 
-                            <div class="mb-8">
-                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4"><span class="material-symbols-outlined text-sm align-middle">sports_volleyball</span> Rotation de départ du set</h4>
-                                ${s.graph_rot ? `<img src="data:image/png;base64,${s.graph_rot}" class="w-full max-w-3xl mx-auto block rounded-xl border border-gray-100 shadow-sm">` : '<p class="text-red-500 italic">Erreur de génération du terrain.</p>'}
-                            </div>
-
-                            <div>
-                                <h4 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4"><span class="material-symbols-outlined text-sm align-middle">troubleshoot</span> Analyse d'efficacité sur Service</h4>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    
-                                    <div class="border border-blue-200 rounded-xl overflow-hidden">
-                                        <div class="bg-blue-50 text-blue-800 font-bold p-3 text-center border-b border-blue-200">Notre Équipe (Bleu)</div>
-                                        <table class="w-full text-sm bg-white">
-                                            <thead>
-                                                <tr class="bg-gray-50 text-gray-500 uppercase text-[10px]">
-                                                    <th class="p-2 text-left">Serveur</th><th class="p-2">Pts Marqués</th><th class="p-2">Pts Encaissés</th><th class="p-2">Différence</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>${effHomeHTML}</tbody>
-                                            <tfoot>
-                                                <tr class="bg-blue-50/50 font-bold text-blue-900 border-t-2 border-blue-200">
-                                                    <td class="p-2">TOTAL</td><td class="p-2 text-center">${totHomeM}</td><td class="p-2 text-center">${totHomeE}</td><td class="p-2 text-center">${totHomeD > 0 ? '+'+totHomeD : totHomeD}</td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-
-                                    <div class="border border-orange-200 rounded-xl overflow-hidden">
-                                        <div class="bg-orange-50 text-orange-800 font-bold p-3 text-center border-b border-orange-200">Adversaire (Orange)</div>
-                                        <table class="w-full text-sm bg-white">
-                                            <thead>
-                                                <tr class="bg-gray-50 text-gray-500 uppercase text-[10px]">
-                                                    <th class="p-2 text-left">Serveur</th><th class="p-2">Pts Marqués</th><th class="p-2">Pts Encaissés</th><th class="p-2">Différence</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>${effAwayHTML}</tbody>
-                                            <tfoot>
-                                                <tr class="bg-orange-50/50 font-bold text-orange-900 border-t-2 border-orange-200">
-                                                    <td class="p-2">TOTAL</td><td class="p-2 text-center">${totAwayM}</td><td class="p-2 text-center">${totAwayE}</td><td class="p-2 text-center">${totAwayD > 0 ? '+'+totAwayD : totAwayD}</td>
-                                                </tr>
-                                            </tfoot>
-                                        </table>
-                                    </div>
-
-                                </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                                <div>${s.graph_rot_h ? `<img src="data:image/png;base64,${s.graph_rot_h}" class="w-full rounded-xl mix-blend-multiply">` : ''}</div>
+                                <div>${s.graph_rot_a ? `<img src="data:image/png;base64,${s.graph_rot_a}" class="w-full rounded-xl mix-blend-multiply">` : ''}</div>
                             </div>
                         </div>
                     `;
@@ -171,11 +187,8 @@
 
                 document.getElementById('statsContainer').classList.remove('hidden');
 
-            } catch (e) {
-                alert("Erreur de connexion lors du téléchargement des graphiques.");
-            } finally {
-                document.getElementById('loadingMsg').classList.add('hidden');
-            }
+            } catch (e) { alert("Erreur réseau."); } 
+            finally { document.getElementById('loadingMsg').classList.add('hidden'); }
         }
     </script>
 </body>
