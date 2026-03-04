@@ -9,7 +9,7 @@ from functools import wraps
 
 # Imports des moteurs
 from pdf_engine import process_pdf_for_web
-from stats_engine import generate_duel_graph, generate_rotation_graph
+from stats_engine import tracer_duel_chronologique_annote, afficher_grille_rotations, sont_similaires, calculer_stats_individuelles, calculer_efficacite_rotations
 
 app = Flask(__name__)
 CORS(app)
@@ -355,3 +355,4 @@ def add_team():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+
