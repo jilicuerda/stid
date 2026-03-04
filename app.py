@@ -7,7 +7,6 @@ from sqlalchemy import create_engine, text
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
 
-# Imports des moteurs
 from pdf_engine import process_pdf_for_web
 from stats_engine import (
     tracer_duel_chronologique_annote, 
@@ -172,8 +171,9 @@ def save_match():
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
     except Exception as e: 
-        print("ERREUR SAUVEGARDE :", str(e))
-        return jsonify({"status": "error", "message": "Erreur SQL : " + str(e)}), 200
+        print("ERREUR SAUVEGARDE:", e)
+        # --- LA BALISE DE TEST EST ICI ---
+        return jsonify({"status": "error", "message": f"[CODE V2 ACTIF] Erreur BDD : {str(e)}"}), 200
 
 @app.route('/live')
 @login_required
