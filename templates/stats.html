@@ -31,7 +31,7 @@
                     <span class="material-symbols-outlined">magic_button</span> Générer le Rapport
                 </button>
             </div>
-            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Extraction et compilation des données en cours...</p>
+            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Extraction et compilation des données en cours... (Cela peut prendre jusqu'à 30 secondes)</p>
         </div>
 
         <div id="statsContainer" class="hidden space-y-12">
@@ -118,8 +118,24 @@
 
             try {
                 const res = await fetch(`/api/match_stats/${matchId}`);
-                const data = await res.json();
-                if (data.error) { alert(data.error); document.getElementById('loadingMsg').classList.add('hidden'); return; }
+                
+                // LECTURE BRUTE (Mode Détective pour intercepter le crash du serveur Render)
+                const text = await res.text();
+                
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch(e) {
+                    alert("🚨 CRASH DU SERVEUR RENDER 🚨\nCode HTTP : " + res.status + "\n\nExplication probable : Le serveur a manqué de mémoire RAM (OOM) ou a mis plus de 30 secondes à générer les graphiques.\n\nMessage brut : \n" + text.substring(0, 200));
+                    document.getElementById('loadingMsg').classList.add('hidden');
+                    return;
+                }
+
+                if (data.error) { 
+                    alert("Erreur de calcul : " + data.error); 
+                    document.getElementById('loadingMsg').classList.add('hidden'); 
+                    return; 
+                }
 
                 document.getElementById('matchTitleDisplay').innerText = data.match_title;
                 
@@ -143,8 +159,8 @@
                     </tr>`;
                 };
                 
-                document.getElementById('tableIndivHome').innerHTML = data.stats_indiv_h.map(r => buildIndivRow(r, True)).join('');
-                document.getElementById('tableIndivAway').innerHTML = data.stats_indiv_a.map(r => buildIndivRow(r, False)).join('');
+                document.getElementById('tableIndivHome').innerHTML = data.stats_indiv_h.map(r => buildIndivRow(r, true)).join('');
+                document.getElementById('tableIndivAway').innerHTML = data.stats_indiv_a.map(r => buildIndivRow(r, false)).join('');
 
                 // 2. STATS ROTATIONS GLOBALES
                 document.getElementById('titleRotHome').innerText = data.team_home;
@@ -187,8 +203,12 @@
 
                 document.getElementById('statsContainer').classList.remove('hidden');
 
-            } catch (e) { alert("Erreur réseau."); } 
-            finally { document.getElementById('loadingMsg').classList.add('hidden'); }
+            } catch (e) { 
+                alert("Erreur fatale JS : " + e.message); 
+            } 
+            finally { 
+                document.getElementById('loadingMsg').classList.add('hidden'); 
+            }
         }
     </script>
 </body>
