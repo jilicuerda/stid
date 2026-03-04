@@ -9,7 +9,15 @@ from functools import wraps
 
 # Imports des moteurs
 from pdf_engine import process_pdf_for_web
-from stats_engine import generate_duel_graph, generate_rotation_graph
+
+# NOUVEAUX IMPORTS (Correction de l'ImportError)
+from stats_engine import (
+    tracer_duel_chronologique_annote, 
+    afficher_grille_rotations, 
+    sont_similaires, 
+    calculer_stats_individuelles, 
+    calculer_efficacite_rotations
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -294,11 +302,9 @@ def get_match_stats(match_id):
                 pts_set = [p for p in tous_points if p['set'] == n_set]
                 if not pts_set: continue
                 
-                b64_duel = generate_duel_graph(pts_set, team_home, team_away, n_set)
+                b64_duel = tracer_duel_chronologique_annote(pts_set, team_home, team_away, n_set)
                 
                 st_h, st_a = [], []
-                # On importe la fonction locale du stats_engine pour pas réinventer la roue ici
-                from stats_engine import sont_similaires 
                 
                 for pt in pts_set:
                     kh, ka, win = pt['rot_home'], pt['rot_away'], pt['winner_team']
@@ -319,8 +325,6 @@ def get_match_stats(match_id):
                             f_a = True; break
                     if not f_a: st_a.append({'key': ka, 'm': 1 if win == team_away else 0, 'e': 1 if win != team_away else 0, 'point': pt})
                 
-                # Import des fonctions d'affichage
-                from stats_engine import afficher_grille_rotations
                 b64_rot_h = afficher_grille_rotations(st_h, team_home, team_away, team_home, 'royalblue', f"Positions de Service : {team_home}")
                 b64_rot_a = afficher_grille_rotations(st_a, team_home, team_away, team_away, 'darkorange', f"Positions de Service : {team_away}")
                 
@@ -329,7 +333,6 @@ def get_match_stats(match_id):
                     "graph_duel": b64_duel, "graph_rot_h": b64_rot_h, "graph_rot_a": b64_rot_a
                 })
             
-            from stats_engine import calculer_stats_individuelles, calculer_efficacite_rotations
             indiv_h, individ_a = calculer_stats_individuelles(tous_points, roster_h, roster_a, team_home, team_away)
             eff_rot_h, eff_rot_a = calculer_efficacite_rotations(tous_points, team_home, team_away)
                 
