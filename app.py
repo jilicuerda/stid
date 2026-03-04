@@ -9,8 +9,6 @@ from functools import wraps
 
 # Imports des moteurs
 from pdf_engine import process_pdf_for_web
-
-# NOUVEAUX IMPORTS (Correction de l'ImportError)
 from stats_engine import (
     tracer_duel_chronologique_annote, 
     afficher_grille_rotations, 
@@ -41,7 +39,6 @@ def superadmin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- AUTHENTIFICATION ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -66,7 +63,11 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# --- ROUTES API POUR LES EQUIPES ---
+@app.route('/')
+@login_required
+def index(): 
+    return render_template('index.html')
+
 @app.route('/api/my_teams', methods=['GET'])
 @login_required
 def get_my_teams():
@@ -74,9 +75,7 @@ def get_my_teams():
         with engine.connect() as conn:
             teams = conn.execute(text("SELECT id, name FROM teams WHERE club_id = :cid ORDER BY name"), {"cid": session.get('club_id')}).fetchall()
             return jsonify([{"id": t[0], "name": t[1]} for t in teams])
-    except Exception as e: 
-        print("Erreur my_teams:", e)
-        return jsonify([])
+    except Exception as e: return jsonify([])
 
 @app.route('/api/last_roster/<int:team_id>', methods=['GET'])
 @login_required
@@ -93,15 +92,7 @@ def get_last_roster(team_id):
                 if isinstance(roster_data, str): roster_data = json.loads(roster_data)
                 return jsonify({"status": "success", "roster": roster_data, "last_team_name": result[1]})
             return jsonify({"status": "empty"})
-    except Exception as e: 
-        print("Erreur last_roster:", e)
-        return jsonify({"status": "error", "message": "Erreur BDD"}), 200
-
-# --- MATCH EN DIRECT ---
-@app.route('/')
-@login_required
-def index(): 
-    return render_template('index.html')
+    except Exception as e: return jsonify({"status": "error", "message": "Erreur BDD"}), 200
 
 @app.route('/api/go_live', methods=['POST'])
 @login_required
@@ -121,9 +112,7 @@ def go_live():
             match_id = result.fetchone()[0]
             trans.commit()
             return jsonify({"status": "success", "match_id": match_id})
-    except Exception as e: 
-        print("Erreur go_live:", e)
-        return jsonify({"status": "error", "message": str(e)}), 200
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
 
 @app.route('/api/update_live', methods=['POST'])
 @login_required
@@ -137,9 +126,7 @@ def update_live():
                          {"cs": data.get('set', 1), "sh": data.get('scoreHome', 0), "sa": data.get('scoreAway', 0), "setsh": data.get('setsHome', 0), "setsa": data.get('setsAway', 0), "mid": data['match_id']})
             trans.commit()
             return jsonify({"status": "success"})
-    except Exception as e: 
-        print("Erreur update_live:", e)
-        return jsonify({"status": "error"}), 200
+    except Exception: return jsonify({"status": "error"}), 200
 
 @app.route('/api/save_match', methods=['POST'])
 @login_required
@@ -185,13 +172,12 @@ def save_match():
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
     except Exception as e: 
-        print("ERREUR SAUVEGARDE:", e)
-        return jsonify({"status": "error", "message": str(e)}), 200
+        print("ERREUR SAUVEGARDE :", str(e))
+        return jsonify({"status": "error", "message": "Erreur SQL : " + str(e)}), 200
 
 @app.route('/live')
 @login_required
-def live_page(): 
-    return render_template('live.html')
+def live_page(): return render_template('live.html')
 
 @app.route('/api/live_matches')
 @login_required
@@ -202,11 +188,9 @@ def live_matches_api():
             return jsonify([{"id": m[0], "team_home": m[1], "team_away": m[2], "current_set": m[3], "score_home": m[4], "score_away": m[5], "sets_home": m[6], "sets_away": m[7]} for m in matches])
     except Exception: return jsonify([])
 
-# --- ROUTES EXTRACTION PDF ---
 @app.route('/extraction')
 @login_required
-def extraction_page(): 
-    return render_template('extraction.html')
+def extraction_page(): return render_template('extraction.html')
 
 @app.route('/api/upload_pdf', methods=['POST'])
 @login_required
@@ -221,9 +205,7 @@ def upload_pdf():
             res = process_pdf_for_web(t_path)
             os.remove(t_path)
             return jsonify({"status": "success", "data": res})
-        except Exception as e: 
-            print("Erreur upload_pdf:", e)
-            return jsonify({"error": str(e)}), 500
+        except Exception as e: return jsonify({"error": str(e)}), 500
     return jsonify({"error": "Format invalide."}), 400
 
 @app.route('/api/save_pdf_report', methods=['POST'])
@@ -235,17 +217,11 @@ def save_pdf_report():
             conn.execute(text("INSERT INTO pdf_reports (club_id, team_home, team_away, report_data) VALUES (:cid, :h, :a, :rd)"), {"cid": session.get('club_id'), "h": request.json.get('equipe_a', ''), "a": request.json.get('equipe_b', ''), "rd": json.dumps(request.json)})
             trans.commit()
             return jsonify({"status": "success", "message": "Sauvegardé !"})
-    except Exception as e: 
-        print("Erreur save_pdf_report:", e)
-        return jsonify({"status": "error", "message": str(e)}), 500
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
-# ======================================================================
-# ROUTES POUR LES STATISTIQUES 
-# ======================================================================
 @app.route('/stats')
 @login_required
-def stats_page(): 
-    return render_template('stats.html')
+def stats_page(): return render_template('stats.html')
 
 @app.route('/api/completed_matches')
 @login_required
@@ -261,9 +237,7 @@ def get_completed_matches():
                 winner = f" - Victoire: {m[4]}" if m[4] else ""
                 result.append({"id": m[0], "title": f"{t_home} vs {t_away} ({date_val}){winner}"})
             return jsonify(result)
-    except Exception as e:
-        print(f"Erreur API Matchs: {e}")
-        return jsonify({"error": str(e)}), 500
+    except Exception as e: return jsonify({"error": str(e)}), 500
 
 @app.route('/api/match_stats/<int:match_id>')
 @login_required
@@ -274,7 +248,6 @@ def get_match_stats(match_id):
             if not match_info: return jsonify({"error": "Match non trouvé"}), 404
             
             team_home, team_away = match_info[0], match_info[1]
-            
             try: roster_h = json.loads(match_info[2]) if isinstance(match_info[2], str) else (match_info[2] or {})
             except: roster_h = {}
             try: roster_a = json.loads(match_info[3]) if isinstance(match_info[3], str) else (match_info[3] or {})
@@ -285,8 +258,7 @@ def get_match_stats(match_id):
                 FROM points WHERE match_id = :mid ORDER BY id ASC
             """), {"mid": match_id}).fetchall()
             
-            if not points or len(points) == 0:
-                return jsonify({"error": "Ce match ne contient aucun point. (Score 0-0)"}), 400
+            if not points or len(points) == 0: return jsonify({"error": "Ce match ne contient aucun point. (Score 0-0)"}), 400
                 
             tous_points = []
             sets_list = set()
@@ -303,7 +275,6 @@ def get_match_stats(match_id):
                 if not pts_set: continue
                 
                 b64_duel = tracer_duel_chronologique_annote(pts_set, team_home, team_away, n_set)
-                
                 st_h, st_a = [], []
                 
                 for pt in pts_set:
@@ -348,7 +319,6 @@ def get_match_stats(match_id):
         print(f"ERREUR GENERATION STATS : {e}")
         return jsonify({"error": f"Erreur de calcul des statistiques : {str(e)}"}), 500
 
-# --- ROUTES ADMINISTRATION ---
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
