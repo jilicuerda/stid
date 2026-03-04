@@ -7,15 +7,19 @@ from matplotlib.lines import Line2D
 import io
 import base64
 import math
+import gc # Nettoyeur de mémoire RAM
 
 # ======================================================================
 # 1. FONCTIONS UTILITAIRES
 # ======================================================================
 def fig_to_base64(fig):
-    """Convertit le graphique en image pour le site web."""
+    """Convertit le graphique en image pour le site web et vide la RAM."""
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+    # dpi=80 au lieu de 100 pour calculer beaucoup plus vite sur le serveur Render
+    fig.savefig(buf, format='png', bbox_inches='tight', dpi=80) 
     plt.close(fig)
+    plt.close('all') # Force la fermeture de toutes les fenêtres invisibles
+    gc.collect() # Ordonne au serveur de vider sa mémoire RAM immédiatement
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
 def extraire_positions(rot_str):
@@ -149,7 +153,6 @@ def afficher_grille_rotations(liste_stats, nom_h, nom_a, equipe_service, couleur
             if i < n_rot: dessiner_un_terrain(axes_flat[i], liste_stats[i]['point'], liste_stats[i], couleur_theme, nom_h, nom_a, equipe_service)
             else: axes_flat[i].axis('off')
         
-        # Ajout d'un titre global pour la grille
         fig.suptitle(titre, fontsize=18, fontweight='bold', y=1.02)
         return fig_to_base64(fig)
     except Exception as e:
@@ -197,7 +200,6 @@ def calculer_stats_individuelles(tous_points, roster_home, roster_away, nom_h, n
             if action == "Faute Service":
                 target_stats[serv_num]["Serv_F"] += 1
 
-    # Formatage final
     res_home = list(stats_home.values())
     res_away = list(stats_away.values())
     
@@ -219,7 +221,6 @@ def calculer_efficacite_rotations(tous_points, nom_h, nom_a):
         kh, ka = str(pt.get('rot_home', '')), str(pt.get('rot_away', ''))
         win, serv_team = pt.get('winner_team'), pt.get('server_team')
 
-        # Home
         trouve_h = False
         for s in stats_rot_h:
             if sont_similaires(s['key'], kh):
@@ -240,7 +241,6 @@ def calculer_efficacite_rotations(tous_points, nom_h, nom_a):
                 else: new_rot['er'] = 1
             stats_rot_h.append(new_rot)
 
-        # Away
         trouve_a = False
         for s in stats_rot_a:
             if sont_similaires(s['key'], ka):
@@ -261,7 +261,6 @@ def calculer_efficacite_rotations(tous_points, nom_h, nom_a):
                 else: new_rot['er'] = 1
             stats_rot_a.append(new_rot)
 
-    # Ajout du total pour affichage
     for s in stats_rot_h: s['diff'] = (s['ms'] + s['mr']) - (s['es'] + s['er'])
     for s in stats_rot_a: s['diff'] = (s['ms'] + s['mr']) - (s['es'] + s['er'])
 
