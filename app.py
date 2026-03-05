@@ -100,40 +100,7 @@ def get_last_roster(team_id):
             return jsonify({"status": "empty"})
     except Exception as e: return jsonify({"status": "error", "message": "Erreur BDD"}), 200
 
-@app.route('/api/go_live', methods=['POST'])
-@login_required
-def go_live():
-    data = request.json
-    try:
-        with engine.connect() as conn:
-            trans = conn.begin()
-            result = conn.execute(text("""
-                INSERT INTO matches (club_id, team_id, team_home, team_away, current_set, score_home, score_away, sets_home, sets_away, is_live, roster_home, roster_away)
-                VALUES (:cid, :tid, :th, :ta, :cs, :sh, :sa, :setsh, :setsa, TRUE, :rh, :ra) RETURNING id
-            """), {
-                "cid": session.get('club_id'), "tid": data.get('teamId'), "th": data.get('homeName'), "ta": data.get('awayName'),
-                "cs": data.get('set', 1), "sh": data.get('scoreHome', 0), "sa": data.get('scoreAway', 0), "setsh": data.get('setsHome', 0), "setsa": data.get('setsAway', 0),
-                "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))
-            })
-            match_id = result.fetchone()[0]
-            trans.commit()
-            return jsonify({"status": "success", "match_id": match_id})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
-
-@app.route('/api/update_live', methods=['POST'])
-@login_required
-def update_live():
-    data = request.json
-    if not data.get('match_id'): return jsonify({"error": "No match ID"}), 400
-    try:
-        with engine.connect() as conn:
-            trans = conn.begin()
-            conn.execute(text("UPDATE matches SET current_set=:cs, score_home=:sh, score_away=:sa, sets_home=:setsh, sets_away=:setsa WHERE id=:mid"), 
-                         {"cs": data.get('set', 1), "sh": data.get('scoreHome', 0), "sa": data.get('scoreAway', 0), "setsh": data.get('setsHome', 0), "setsa": data.get('setsAway', 0), "mid": data['match_id']})
-            trans.commit()
-            return jsonify({"status": "success"})
-    except Exception: return jsonify({"status": "error"}), 200
-
+# --- SAUVEGARDE AUTO EN TEMPS REEL ---
 @app.route('/api/save_match', methods=['POST'])
 @login_required
 def save_match():
@@ -142,13 +109,32 @@ def save_match():
         with engine.connect() as conn:
             trans = conn.begin()
             match_id = data.get('match_id')
+            is_finished = data.get('is_finished', False)
+            is_live = not is_finished
+            
             if match_id:
-                conn.execute(text("UPDATE matches SET sets_home=:sh, sets_away=:sa, winner=:w, is_live=FALSE, roster_home=:rh, roster_away=:ra WHERE id=:mid"), 
-                             {"sh": data.get('setsHome', 0), "sa": data.get('setsAway', 0), "w": data.get('winner', ''), "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {})), "mid": match_id})
+                conn.execute(text("""
+                    UPDATE matches SET 
+                        sets_home=:sh, sets_away=:sa, score_home=:score_h, score_away=:score_a, current_set=:c_set,
+                        winner=:w, is_live=:islive, roster_home=:rh, roster_away=:ra 
+                    WHERE id=:mid
+                """), {
+                    "sh": data.get('setsHome', 0), "sa": data.get('setsAway', 0), 
+                    "score_h": data.get('scoreHome', 0), "score_a": data.get('scoreAway', 0), "c_set": data.get('currentSet', 1),
+                    "w": data.get('winner', ''), "islive": is_live,
+                    "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {})), "mid": match_id
+                })
                 conn.execute(text("DELETE FROM points WHERE match_id = :mid"), {"mid": match_id})
             else:
-                result = conn.execute(text("INSERT INTO matches (club_id, team_id, team_home, team_away, sets_home, sets_away, winner, roster_home, roster_away) VALUES (:cid, :tid, :h, :a, :sh, :sa, :w, :rh, :ra) RETURNING id"), 
-                                      {"cid": session.get('club_id'), "tid": data.get('teamId'), "h": data.get('homeName'), "a": data.get('awayName'), "sh": data.get('setsHome', 0), "sa": data.get('setsAway', 0), "w": data.get('winner', ''), "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))})
+                result = conn.execute(text("""
+                    INSERT INTO matches (club_id, team_id, team_home, team_away, sets_home, sets_away, score_home, score_away, current_set, winner, is_live, roster_home, roster_away) 
+                    VALUES (:cid, :tid, :h, :a, :sh, :sa, :score_h, :score_a, :c_set, :w, :islive, :rh, :ra) RETURNING id
+                """), {
+                    "cid": session.get('club_id'), "tid": data.get('teamId'), "h": data.get('homeName'), "a": data.get('awayName'), 
+                    "sh": data.get('setsHome', 0), "sa": data.get('setsAway', 0), "score_h": data.get('scoreHome', 0), "score_a": data.get('scoreAway', 0),
+                    "c_set": data.get('currentSet', 1), "w": data.get('winner', ''), "islive": is_live,
+                    "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))
+                })
                 match_id = result.fetchone()[0]
 
             if data.get('history'):
@@ -176,9 +162,12 @@ def save_match():
                 """), pts)
             
             trans.commit()
-            return jsonify({"status": "success", "message": "Match sauvegardé !"})
-    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
+            return jsonify({"status": "success", "match_id": match_id, "message": "Sauvegardé !"})
+    except Exception as e: 
+        print("ERREUR SAUVEGARDE:", e)
+        return jsonify({"status": "error", "message": "Erreur BDD"}), 200
 
+# --- VUE SPECTATEUR ---
 @app.route('/live')
 @login_required
 def live_page(): return render_template('live.html')
@@ -236,14 +225,20 @@ def stats_page(): return render_template('stats.html')
 def get_completed_matches():
     try:
         with engine.connect() as conn:
-            matches = conn.execute(text("SELECT id, team_home, team_away, created_at, winner FROM matches WHERE club_id = :cid ORDER BY created_at DESC"), {"cid": session.get('club_id')}).fetchall()
+            matches = conn.execute(text("SELECT id, team_home, team_away, created_at, winner, is_live FROM matches WHERE club_id = :cid ORDER BY created_at DESC"), {"cid": session.get('club_id')}).fetchall()
             result = []
             for m in matches:
                 t_home = m[1] if m[1] else "Eq1"
                 t_away = m[2] if m[2] else "Eq2"
                 date_val = str(m[3])[:10] if m[3] else "?"
-                winner = f" - Victoire: {m[4]}" if m[4] else ""
-                result.append({"id": m[0], "title": f"{t_home} vs {t_away} ({date_val}){winner}"})
+                
+                # Tag Visuel si le match est en direct
+                if m[5]: # is_live == True
+                    status = "🔴 EN DIRECT"
+                else:
+                    status = f"Victoire: {m[4]}" if m[4] else "Terminé"
+                    
+                result.append({"id": m[0], "title": f"{t_home} vs {t_away} ({date_val}) - {status}"})
             return jsonify(result)
     except Exception as e: return jsonify({"error": str(e)}), 500
 
@@ -266,7 +261,7 @@ def get_match_stats(match_id):
                 FROM points WHERE match_id = :mid ORDER BY id ASC
             """), {"mid": match_id}).fetchall()
             
-            if not points or len(points) == 0: return jsonify({"error": "Ce match ne contient aucun point. (Score 0-0)"}), 400
+            if not points or len(points) == 0: return jsonify({"error": "Ce match vient de commencer, aucun point enregistré. (Score 0-0)"}), 400
                 
             tous_points = []
             sets_list = set()
