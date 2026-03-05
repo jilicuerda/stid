@@ -11,66 +11,88 @@
         .bg-gradient-blue { background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%); }
         .bg-gradient-orange { background: linear-gradient(90deg, #fff7ed 0%, #ffedd5 100%); }
 
-        /* --- ANIMATION DU BALLON DE VOLLEY --- */
-        .loader-container {
+        /* --- STYLES DU MENU DES MATCHS (Basé sur votre CSS) --- */
+        .match-menu {
+            width: 100%;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .match-item {
             display: flex;
-            flex-direction: column;
             align-items: center;
-            margin-top: 2rem;
-            margin-bottom: 2rem;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s ease;
         }
-        .volleyball-wrapper {
-            position: relative;
-            width: 100px;
-            height: 140px;
+        .match-item:hover { background: #f8f9fa; }
+        .match-item:last-child { border-bottom: none; }
+        
+        .team-info {
             display: flex;
-            flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
+            gap: 10px;
+            width: 35%;
         }
-        .ball-bouncer {
-            animation: bounce 0.5s infinite alternate ease-in; 
+        .team-info.reverse {
+            flex-direction: row-reverse;
+            text-align: right;
         }
-        .volleyball {
-            width: 70px;
-            height: 70px;
-            animation: spin 1.5s infinite linear;
+        .team-logo {
+            width: 35px;
+            height: 35px;
+            object-fit: contain;
+            border-radius: 5px;
         }
-        .shadow-ball {
-            width: 50px;
-            height: 8px;
-            background: rgba(0, 0, 0, 0.15);
+        .team-name { font-weight: 700; font-size: 14px; color: #1e293b; }
+        .vs-score { font-size: 16px; color: #334155; font-weight: 900; text-align: center; width: 15%; }
+        
+        .status-container { width: 15%; display: flex; justify-content: flex-end; }
+        .status-badge { font-size: 11px; padding: 4px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
+        
+        .status-live {
+            background: #ffebee;
+            color: #d32f2f;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid #ffcdd2;
+        }
+        .status-live::before {
+            content: '';
+            display: block;
+            width: 6px;
+            height: 6px;
+            background: #d32f2f;
             border-radius: 50%;
-            margin-top: 5px;
-            animation: shadow-scale 0.5s infinite alternate ease-in;
+            animation: pulse-red 1.5s infinite;
         }
-        .loading-text {
-            margin-top: 24px;
-            font-weight: 700;
-            font-size: 1.1rem;
-            color: #2563eb; /* text-blue-600 */
-            animation: pulse 1s infinite alternate ease-in-out;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
+        .status-past { background: #f1f5f9; color: #64748b; }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.5); }
+            70% { box-shadow: 0 0 0 6px rgba(211, 47, 47, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); }
         }
 
-        /* Keyframes */
-        @keyframes bounce {
-            0% { transform: translateY(-80px); }
-            100% { transform: translateY(0); }
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        @keyframes shadow-scale {
-            0% { transform: scale(0.4); opacity: 0.2; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes pulse {
-            0% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
+        /* --- ANIMATION DU BALLON DE VOLLEY --- */
+        .loader-container { display: flex; flex-direction: column; align-items: center; margin-top: 2rem; margin-bottom: 2rem; }
+        .volleyball-wrapper { position: relative; width: 100px; height: 140px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+        .ball-bouncer { animation: bounce 0.5s infinite alternate ease-in; }
+        .volleyball { width: 70px; height: 70px; animation: spin 1.5s infinite linear; }
+        .shadow-ball { width: 50px; height: 8px; background: rgba(0, 0, 0, 0.15); border-radius: 50%; margin-top: 5px; animation: shadow-scale 0.5s infinite alternate ease-in; }
+        .loading-text { margin-top: 24px; font-weight: 700; font-size: 1.1rem; color: #2563eb; animation: pulse 1s infinite alternate ease-in-out; letter-spacing: 0.05em; text-transform: uppercase; }
+
+        @keyframes bounce { 0% { transform: translateY(-80px); } 100% { transform: translateY(0); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes shadow-scale { 0% { transform: scale(0.4); opacity: 0.2; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes pulse { 0% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -82,15 +104,13 @@
 
     <main class="max-w-7xl mx-auto mt-8 p-4">
         
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8 relative z-10">
-            <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-wide">Analyser un match :</label>
-            <div class="flex gap-4">
-                <select id="matchSelect" class="flex-1 border-2 border-slate-200 rounded-xl p-3 bg-slate-50 text-slate-800 font-bold focus:ring-blue-500 outline-none">
-                    <option value="" disabled selected>Chargement...</option>
-                </select>
-                <button onclick="loadStats()" class="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg">
-                    <span class="material-symbols-outlined">magic_button</span> Générer le Rapport
-                </button>
+        <div class="mb-8 max-w-4xl mx-auto">
+            <h2 class="text-lg font-black text-slate-800 mb-4 uppercase tracking-widest flex items-center gap-2">
+                <span class="material-symbols-outlined text-blue-500">list_alt</span> Sélectionnez un Match
+            </h2>
+            
+            <div id="matchMenuContainer" class="match-menu">
+                <div class="p-6 text-center text-slate-500 font-bold animate-pulse">Chargement de l'historique...</div>
             </div>
         </div>
 
@@ -173,30 +193,61 @@
 
             <section class="space-y-8" id="setsGraphsZone">
                 <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">insert_chart</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">3. Analyse Chronologique des Sets</h3></div>
-                </section>
+            </section>
         </div>
     </main>
 
     <script>
         document.addEventListener("DOMContentLoaded", async () => {
-            const sel = document.getElementById('matchSelect');
+            const listContainer = document.getElementById('matchMenuContainer');
+            
             try {
                 const res = await fetch('/api/completed_matches');
                 const data = await res.json();
-                if (data.error) { sel.innerHTML = `<option value="" disabled selected>Erreur</option>`; return; }
-                if (data.length === 0) { sel.innerHTML = '<option value="" disabled selected>Aucun match trouvé</option>'; return; }
-                sel.innerHTML = '<option value="" disabled selected>Choisissez un match...</option>';
-                data.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.title}</option>`);
-            } catch (e) {}
+                
+                if (data.error) { listContainer.innerHTML = `<div class="p-6 text-red-500 font-bold text-center">Erreur: ${data.error}</div>`; return; }
+                if (data.length === 0) { listContainer.innerHTML = `<div class="p-6 text-slate-500 font-bold text-center">Aucun match enregistré.</div>`; return; }
+                
+                listContainer.innerHTML = '';
+                
+                data.forEach(m => {
+                    const statusHtml = m.is_live 
+                        ? `<span class="status-badge status-live">Live</span>` 
+                        : `<span class="status-badge status-past">Terminé</span>`;
+                        
+                    // Si pas de logo trouvé, on génère une image avec les initiales de l'équipe dynamiquement !
+                    const fallbackHome = `https://ui-avatars.com/api/?name=${encodeURIComponent(m.team_home)}&background=e0e7ff&color=1e40af&bold=true`;
+                    const fallbackAway = `https://ui-avatars.com/api/?name=${encodeURIComponent(m.team_away)}&background=ffedd5&color=c2410c&bold=true`;
+                    
+                    const imgHome = m.logo_home ? m.logo_home : fallbackHome;
+                    const imgAway = m.logo_away ? m.logo_away : fallbackAway;
+
+                    listContainer.innerHTML += `
+                    <div class="match-item" onclick="loadStats(${m.id})">
+                        <div class="team-info">
+                            <img src="${imgHome}" class="team-logo" onerror="this.src='${fallbackHome}'">
+                            <span class="team-name">${m.team_home}</span>
+                        </div>
+                        <div class="vs-score">${m.score}</div>
+                        <div class="team-info reverse">
+                            <img src="${imgAway}" class="team-logo" onerror="this.src='${fallbackAway}'">
+                            <span class="team-name">${m.team_away}</span>
+                        </div>
+                        <div class="status-container hidden sm:flex">${statusHtml}</div>
+                    </div>`;
+                });
+
+            } catch (e) {
+                listContainer.innerHTML = `<div class="p-6 text-red-500 font-bold text-center">Erreur de connexion.</div>`;
+            }
         });
 
-        async function loadStats() {
-            const matchId = document.getElementById('matchSelect').value;
-            if (!matchId) return;
-
-            // Affichage de la superbe animation de chargement
+        async function loadStats(matchId) {
             document.getElementById('loadingMsg').classList.remove('hidden');
             document.getElementById('statsContainer').classList.add('hidden');
+            
+            // Fait défiler la page vers le ballon
+            document.getElementById('loadingMsg').scrollIntoView({ behavior: 'smooth' });
 
             try {
                 const res = await fetch(`/api/match_stats/${matchId}`);
@@ -206,7 +257,7 @@
                 try { data = JSON.parse(text); } 
                 catch(e) { alert("🚨 CRASH SERVEUR : Timeout ou RAM.\n\n" + text.substring(0, 200)); return; }
 
-                if (data.error) { alert("Erreur: " + data.error); return; }
+                if (data.error) { alert("Information : " + data.error); return; }
 
                 document.getElementById('matchTitleDisplay').innerText = data.match_title;
                 
@@ -281,13 +332,11 @@
                     `;
                 });
 
-                // Affichage final des données
                 document.getElementById('statsContainer').classList.remove('hidden');
 
             } catch (e) { 
                 alert("Erreur JS : " + e.message); 
             } finally { 
-                // Masquer le ballon de volley
                 document.getElementById('loadingMsg').classList.add('hidden'); 
             }
         }
