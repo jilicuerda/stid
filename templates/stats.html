@@ -16,7 +16,7 @@
     
     <header class="bg-slate-900 text-white p-4 shadow-xl flex justify-between items-center sticky top-0 z-50">
         <h1 class="text-xl font-black flex items-center gap-2 tracking-widest"><span class="material-symbols-outlined text-blue-500">query_stats</span> DATA SCOUTING</h1>
-        <a href="/" class="bg-slate-800 px-4 py-2 rounded-lg font-bold hover:bg-slate-700 transition text-sm">Retour Console</a>
+        <a href="/" class="bg-slate-800 px-4 py-2 rounded-lg font-bold hover:bg-slate-700 transition text-sm">Retour Accueil</a>
     </header>
 
     <main class="max-w-7xl mx-auto mt-8 p-4">
@@ -31,22 +31,27 @@
                     <span class="material-symbols-outlined">magic_button</span> Générer le Rapport
                 </button>
             </div>
-            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Extraction et compilation des données en cours... (Cela peut prendre jusqu'à 30 secondes)</p>
+            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Extraction et compilation algorithmique en cours...</p>
         </div>
 
         <div id="statsContainer" class="hidden space-y-12">
             <h2 id="matchTitleDisplay" class="text-4xl font-black text-slate-800 text-center my-10 uppercase tracking-tight"></h2>
             
             <section class="space-y-8">
-                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">group</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">1. Statistiques Individuelles</h3></div>
+                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">group</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">1. Performances Individuelles</h3></div>
                 
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div id="pieZoneHome" class="bg-white rounded-2xl shadow-sm p-4 border border-blue-200 flex justify-center hidden"></div>
+                    <div id="pieZoneAway" class="bg-white rounded-2xl shadow-sm p-4 border border-orange-200 flex justify-center hidden"></div>
+                </div>
+
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                     <div class="bg-white rounded-2xl shadow-lg border-t-8 border-blue-500 overflow-hidden">
                         <div class="bg-gradient-blue p-4 font-black text-blue-900 uppercase tracking-widest text-center" id="titleIndivHome"></div>
                         <div class="overflow-x-auto p-4">
                             <table class="w-full text-sm text-center">
-                                <thead class="text-[10px] text-gray-500 border-b-2 border-blue-200">
-                                    <tr><th class="p-2 text-left">N° / Licence</th><th class="p-2">PTS</th><th class="p-2">Att</th><th class="p-2">Blk</th><th class="p-2">Ace</th><th class="p-2">Feinte</th><th class="p-2">Serv (Réussite)</th></tr>
+                                <thead class="text-[9px] text-gray-500 border-b-2 border-blue-200 uppercase">
+                                    <tr><th class="p-2 text-left">N° / Poste</th><th class="p-2 text-blue-600">Total<br>Pts</th><th class="p-2 text-red-500">Fautes<br>Att.</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2">Att<br>Gagnées</th><th class="p-2">Blocs</th><th class="p-2">Aces</th><th class="p-2">% Serv<br>Réussis</th></tr>
                                 </thead>
                                 <tbody id="tableIndivHome" class="divide-y divide-gray-100"></tbody>
                             </table>
@@ -56,8 +61,8 @@
                         <div class="bg-gradient-orange p-4 font-black text-orange-900 uppercase tracking-widest text-center" id="titleIndivAway"></div>
                         <div class="overflow-x-auto p-4">
                             <table class="w-full text-sm text-center">
-                                <thead class="text-[10px] text-gray-500 border-b-2 border-orange-200">
-                                    <tr><th class="p-2 text-left">N°</th><th class="p-2">PTS</th><th class="p-2">Att</th><th class="p-2">Blk</th><th class="p-2">Ace</th><th class="p-2">Feinte</th><th class="p-2">Serv (Réussite)</th></tr>
+                                <thead class="text-[9px] text-gray-500 border-b-2 border-orange-200 uppercase">
+                                    <tr><th class="p-2 text-left">N° / Poste</th><th class="p-2 text-orange-600">Total<br>Pts</th><th class="p-2 text-red-500">Fautes<br>Att.</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2">Att<br>Gagnées</th><th class="p-2">Blocs</th><th class="p-2">Aces</th><th class="p-2">% Serv<br>Réussis</th></tr>
                                 </thead>
                                 <tbody id="tableIndivAway" class="divide-y divide-gray-100"></tbody>
                             </table>
@@ -67,13 +72,13 @@
             </section>
 
             <section class="space-y-8">
-                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">rotate_right</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">2. Efficacité Globale par Rotation</h3></div>
+                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">rotate_right</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">2. Efficacité Tactique (Side-out / Break)</h3></div>
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
                     <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                         <div class="bg-slate-100 p-3 font-bold text-slate-700 text-center text-sm border-b" id="titleRotHome"></div>
                         <table class="w-full text-sm text-center">
-                            <thead class="text-[10px] bg-slate-50 text-slate-500 border-b">
-                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Marqués<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2">Encaissés<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2 font-black text-blue-600">DIFF</th></tr>
+                            <thead class="text-[9px] bg-slate-50 text-slate-500 border-b uppercase">
+                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Réussite Récep<br>(Side-out)</th><th class="p-2">Gain Service<br>(Break)</th><th class="p-2 text-red-500">Fautes<br>Att</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2 font-black text-blue-600">BILAN</th></tr>
                             </thead>
                             <tbody id="tableRotHome" class="divide-y divide-gray-100"></tbody>
                         </table>
@@ -81,8 +86,8 @@
                     <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
                         <div class="bg-slate-100 p-3 font-bold text-slate-700 text-center text-sm border-b" id="titleRotAway"></div>
                         <table class="w-full text-sm text-center">
-                            <thead class="text-[10px] bg-slate-50 text-slate-500 border-b">
-                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Marqués<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2">Encaissés<br><span class="text-[8px]">(Serv/Rec)</span></th><th class="p-2 font-black text-orange-600">DIFF</th></tr>
+                            <thead class="text-[9px] bg-slate-50 text-slate-500 border-b uppercase">
+                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Réussite Récep<br>(Side-out)</th><th class="p-2">Gain Service<br>(Break)</th><th class="p-2 text-red-500">Fautes<br>Att</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2 font-black text-orange-600">BILAN</th></tr>
                             </thead>
                             <tbody id="tableRotAway" class="divide-y divide-gray-100"></tbody>
                         </table>
@@ -118,27 +123,22 @@
 
             try {
                 const res = await fetch(`/api/match_stats/${matchId}`);
-                
-                // LECTURE BRUTE (Mode Détective pour intercepter le crash du serveur Render)
                 const text = await res.text();
                 
                 let data;
-                try {
-                    data = JSON.parse(text);
-                } catch(e) {
-                    alert("🚨 CRASH DU SERVEUR RENDER 🚨\nCode HTTP : " + res.status + "\n\nExplication probable : Le serveur a manqué de mémoire RAM (OOM) ou a mis plus de 30 secondes à générer les graphiques.\n\nMessage brut : \n" + text.substring(0, 200));
-                    document.getElementById('loadingMsg').classList.add('hidden');
-                    return;
-                }
+                try { data = JSON.parse(text); } 
+                catch(e) { alert("🚨 CRASH SERVEUR : Timeout ou RAM.\n\n" + text.substring(0, 200)); return; }
 
-                if (data.error) { 
-                    alert("Erreur de calcul : " + data.error); 
-                    document.getElementById('loadingMsg').classList.add('hidden'); 
-                    return; 
-                }
+                if (data.error) { alert("Erreur: " + data.error); return; }
 
                 document.getElementById('matchTitleDisplay').innerText = data.match_title;
                 
+                // PIE CHARTS
+                const pzh = document.getElementById('pieZoneHome');
+                const pza = document.getElementById('pieZoneAway');
+                if(data.pie_h) { pzh.innerHTML = `<img src="data:image/png;base64,${data.pie_h}" class="w-64">`; pzh.classList.remove('hidden'); }
+                if(data.pie_a) { pza.innerHTML = `<img src="data:image/png;base64,${data.pie_a}" class="w-64">`; pza.classList.remove('hidden'); }
+
                 // 1. STATS INDIVIDUELLES
                 document.getElementById('titleIndivHome').innerText = data.team_home;
                 document.getElementById('titleIndivAway').innerText = data.team_away;
@@ -146,16 +146,17 @@
                 const buildIndivRow = (r, isHome) => {
                     const colorScore = isHome ? 'bg-blue-100 text-blue-900' : 'bg-orange-100 text-orange-900';
                     return `<tr>
-                        <td class="p-3 text-left">
-                            <span class="font-black text-lg">${r.num}</span>
+                        <td class="p-3 text-left leading-tight">
+                            <span class="font-black text-lg">${r.num}</span> <span class="text-xs text-gray-500 uppercase">(${r.poste})</span>
                             ${isHome ? `<br><span class="text-[10px] text-gray-400 font-mono tracking-tighter">${r.licence}</span>` : ''}
                         </td>
                         <td class="p-3 font-black text-lg ${colorScore} rounded-lg">${r.Pts}</td>
+                        <td class="p-3 text-red-500 font-semibold">${r.Err_Att}</td>
+                        <td class="p-3 text-gray-800 font-bold">${r.ratio_pf}</td>
                         <td class="p-3 text-gray-600 font-semibold">${r.Att}</td>
                         <td class="p-3 text-gray-600 font-semibold">${r.Bloc}</td>
-                        <td class="p-3"><span class="font-bold text-gray-800">${r.Ace}</span><br><span class="text-[10px] text-green-600">${r.ace_pct}%</span></td>
-                        <td class="p-3 text-gray-600 font-semibold">${r.Feinte}</td>
-                        <td class="p-3"><span class="font-bold text-gray-800">${r.Serv_T}</span><br><span class="text-[10px] ${r.srv_pct > 50 ? 'text-green-600' : 'text-red-500'}">${r.srv_pct}%</span></td>
+                        <td class="p-3 text-green-600 font-bold">${r.Ace}</td>
+                        <td class="p-3 font-bold">${r.srv_pct}%</td>
                     </tr>`;
                 };
                 
@@ -167,12 +168,14 @@
                 document.getElementById('titleRotAway').innerText = data.team_away;
 
                 const buildRotRow = (r) => {
-                    const diffColor = r.diff > 0 ? 'text-green-600 bg-green-50' : (r.diff < 0 ? 'text-red-500 bg-red-50' : 'text-gray-500 bg-gray-50');
-                    const diffSign = r.diff > 0 ? '+'+r.diff : r.diff;
+                    const diffColor = r.bilan > 0 ? 'text-green-600 bg-green-50' : (r.bilan < 0 ? 'text-red-500 bg-red-50' : 'text-gray-500 bg-gray-50');
+                    const diffSign = r.bilan > 0 ? '+'+r.bilan : r.bilan;
                     return `<tr>
                         <td class="p-3 text-left font-mono text-xs tracking-widest text-slate-500 bg-slate-50 border-r">${r.key}</td>
-                        <td class="p-3 font-bold text-slate-700">${r.ms + r.mr} <span class="text-[10px] font-normal text-slate-400">(${r.ms}/${r.mr})</span></td>
-                        <td class="p-3 font-bold text-slate-700">${r.es + r.er} <span class="text-[10px] font-normal text-slate-400">(${r.es}/${r.er})</span></td>
+                        <td class="p-3 font-bold text-slate-700">${r.recep_pct}%</td>
+                        <td class="p-3 font-bold text-slate-700">${r.serv_pct}%</td>
+                        <td class="p-3 font-bold text-red-500">${r.fa}</td>
+                        <td class="p-3 font-bold text-slate-700">${r.ratio_pf}</td>
                         <td class="p-3 font-black text-lg ${diffColor} rounded-r-lg border-l">${diffSign}</td>
                     </tr>`;
                 };
@@ -203,12 +206,8 @@
 
                 document.getElementById('statsContainer').classList.remove('hidden');
 
-            } catch (e) { 
-                alert("Erreur fatale JS : " + e.message); 
-            } 
-            finally { 
-                document.getElementById('loadingMsg').classList.add('hidden'); 
-            }
+            } catch (e) { alert("Erreur JS : " + e.message); } 
+            finally { document.getElementById('loadingMsg').classList.add('hidden'); }
         }
     </script>
 </body>
