@@ -119,8 +119,8 @@
         </div>
         <div class="flex items-center gap-2">
             <a href="/" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-bold hover:bg-gray-100 transition mr-2"><span class="material-symbols-outlined text-sm">home</span> <span class="hidden lg:inline">Portail</span></a>
-            <button id="btnGoLive" onclick="window.toggleLive()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-bold hover:bg-red-50 transition"><span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">Go Live</span></button>
-            <button onclick="window.sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm hover:bg-blue-700"><span class="material-symbols-outlined text-sm">cloud_upload</span> <span class="hidden sm:inline">Sync Fin</span></button>
+            <a href="/stats" target="_blank" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-800 text-sm font-bold hover:bg-blue-200 transition"><span class="material-symbols-outlined text-sm">query_stats</span> <span class="hidden xl:inline">Stats Live</span></a>
+            <button onclick="window.closeMatch()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-600 text-white text-sm font-semibold shadow-sm hover:bg-red-700"><span class="material-symbols-outlined text-sm">stop_circle</span> <span class="hidden sm:inline">Clôturer Match</span></button>
         </div>
     </header>
 
@@ -157,7 +157,7 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
             <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-100 dark:border-gray-700 h-32 overflow-y-auto"><p class="text-[10px] font-bold text-gray-400 uppercase mb-2"><span class="material-symbols-outlined text-sm align-middle">list_alt</span> Historique</p><div id="historyLog" class="space-y-1 text-sm"></div></div>
-            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm flex flex-col justify-center"><button onclick="window.endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg font-bold hover:bg-red-200 transition uppercase tracking-widest">🏁 Fin du Set (Auto-Save)</button></div>
+            <div class="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm flex flex-col justify-center"><button onclick="window.endSet()" class="w-full py-4 bg-red-50 text-red-600 border border-red-100 rounded-lg font-bold hover:bg-red-200 transition uppercase tracking-widest">🏁 Fin du Set</button></div>
         </div>
     </main>
 
@@ -211,6 +211,10 @@
             window.isHomeLeft = true; 
             window.swapSelection = null; 
             window.currentLiveMatchId = null;
+
+            // Variables pour le système d'Auto-Save
+            let isSyncing = false;
+            let pendingSync = false;
 
             const POS_LEFT = [{ x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }, { x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }];
             const POS_RIGHT = [{ x: '75%', y: '20%' }, { x: '25%', y: '20%' }, { x: '25%', y: '50%' }, { x: '25%', y: '80%' }, { x: '75%', y: '80%' }, { x: '75%', y: '50%' }];
@@ -341,9 +345,15 @@
                 window.updateScreen();
             };
 
+            // DÉBUTER LE MATCH ET AUTO-SYNC
             window.startActualMatch = function() { 
                 if(!window.game.state.server) { alert("⚠️ Veuillez choisir quelle équipe a le premier service !"); return; }
-                window.game.startScoring(); document.getElementById('preMatchBanner').classList.add('hidden'); document.getElementById('scoringControls').classList.remove('hidden'); window.swapSelection = null; window.updateScreen(); 
+                window.game.startScoring(); 
+                document.getElementById('preMatchBanner').classList.add('hidden'); 
+                document.getElementById('scoringControls').classList.remove('hidden'); 
+                window.swapSelection = null; 
+                window.updateScreen(); 
+                window.autoSync(); // Synchronisation immédiate du début
             };
 
             window.switchSides = function() { window.isHomeLeft = !window.isHomeLeft; window.updateScreen(); };
@@ -382,8 +392,6 @@
                 renderHalf(teamLeft, 'courtLeft', POS_LEFT); renderHalf(teamRight, 'courtRight', POS_RIGHT);
                 document.getElementById('historyLog').innerHTML = s.history.slice(-4).reverse().map(h => `<div class="flex justify-between items-center border-b pb-1"><span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span><span class="text-xs bg-gray-100 px-2 rounded text-gray-800">${h.action} (${h.actor_num})</span></div>`).join('');
 
-                if (window.currentLiveMatchId && window.game.state.isStarted) window.silentUpdateLiveScore();
-
                 // ✨ EASTER EGG ZAKARIA ✨
                 if ((s.home.score === 20 && s.away.score === 4) || (s.away.score === 20 && s.home.score === 4)) {
                     let egg = document.getElementById('easterEgg');
@@ -399,70 +407,82 @@
                 }
             };
 
-            window.toggleLive = async function() {
-                if (window.currentLiveMatchId) return; 
-                const teamId = document.getElementById('teamSelect') ? document.getElementById('teamSelect').value : null;
+            // --- LE NOUVEAU MOTEUR D'AUTO-SYNCHRONISATION EN ARRIERE-PLAN ---
+            window.autoSync = async function(isFinished = false) {
+                if (isSyncing) { pendingSync = true; return; }
+                isSyncing = true;
                 window.setSyncStatus('syncing');
+
+                const teamId = document.getElementById('teamSelect') ? document.getElementById('teamSelect').value : null;
+                let finalWinner = "En cours";
+                if (isFinished) {
+                    if (window.game.state.home.sets > window.game.state.away.sets) finalWinner = window.game.state.home.name;
+                    else if (window.game.state.away.sets > window.game.state.home.sets) finalWinner = window.game.state.away.name;
+                    else finalWinner = "Égalité";
+                }
+
+                const payload = {
+                    match_id: window.currentLiveMatchId, 
+                    teamId: teamId,
+                    homeName: window.game.state.home.name, 
+                    awayName: window.game.state.away.name, 
+                    setsHome: window.game.state.home.sets, 
+                    setsAway: window.game.state.away.sets,
+                    scoreHome: window.game.state.home.score,
+                    scoreAway: window.game.state.away.score,
+                    currentSet: window.game.state.set,
+                    winner: finalWinner,
+                    is_finished: isFinished,
+                    history: window.game.state.history,
+                    rosterHome: {all: window.game.state.home.players, court: window.game.state.home.onCourt}, 
+                    rosterAway: {all: window.game.state.away.players, court: window.game.state.away.onCourt}
+                };
+
                 try {
-                    const res = await fetch('/api/go_live', { 
-                        method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ teamId: teamId, homeName: window.game.state.home.name, awayName: window.game.state.away.name, set: window.game.state.set, scoreHome: window.game.state.home.score, scoreAway: window.game.state.away.score, setsHome: window.game.state.home.sets, setsAway: window.game.state.away.sets, rosterHome: {all: window.game.state.home.players, court: window.game.state.home.onCourt}, rosterAway: {all: window.game.state.away.players, court: window.game.state.away.onCourt} }) 
-                    });
-                    const data = await res.json();
-                    if (data.status === "success") {
-                        window.currentLiveMatchId = data.match_id;
-                        const btn = document.getElementById('btnGoLive');
-                        btn.classList.add('bg-red-600', 'text-white', 'border-red-600', 'animate-pulse');
-                        btn.innerHTML = `<span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">EN DIRECT</span>`;
+                    const res = await fetch('/api/save_match', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+                    const json = await res.json(); 
+                    if(json.status === "success") {
+                        if (!window.currentLiveMatchId) window.currentLiveMatchId = json.match_id;
                         window.setSyncStatus('success');
-                    } else window.setSyncStatus('error');
+                    } else { window.setSyncStatus('error'); }
                 } catch(e) { window.setSyncStatus('error'); }
+                
+                isSyncing = false;
+                if (pendingSync && !isFinished) { pendingSync = false; window.autoSync(); }
             };
 
-            window.silentUpdateLiveScore = async function() {
-                window.setSyncStatus('syncing');
-                try {
-                    const res = await fetch('/api/update_live', { 
-                        method: 'POST', headers: {'Content-Type': 'application/json'}, 
-                        body: JSON.stringify({ match_id: window.currentLiveMatchId, set: window.game.state.set, scoreHome: window.game.state.home.score, scoreAway: window.game.state.away.score, setsHome: window.game.state.home.sets, setsAway: window.game.state.away.sets }) 
-                    });
-                    if(res.ok) window.setSyncStatus('success'); else window.setSyncStatus('error');
-                } catch(e) { window.setSyncStatus('error'); }
+            window.closeMatch = async function() {
+                if(!confirm("Clôturer définitivement le match ? Il ne sera plus considéré comme 'En direct' sur la page Stats.")) return;
+                await window.autoSync(true);
+                alert("Match clôturé et sauvegardé avec succès !");
+                location.reload();
             };
 
             window.scoreFromSide = function(side) { window.openScoreModal((side === 'left') ? (window.isHomeLeft ? 'home' : 'away') : (window.isHomeLeft ? 'away' : 'home')); };
             
-            // --- NOUVELLE LOGIQUE DU MODAL POINT ---
             window.openScoreModal = function(winner) {
                 window.game.state.tempPoint = { winner: winner, actorTeam: null, actorNum: null };
                 document.getElementById('scoreTitle').innerText = `Point pour ${window.game.state[winner].name}`;
-                
                 document.getElementById('actionsHome').classList.add('hidden'); 
                 document.getElementById('actionsAway').classList.add('hidden');
-                
                 window.fillGrid('gridHome', 'home', winner); 
                 window.fillGrid('gridAway', 'away', winner);
-                
                 document.getElementById('scoreModal').classList.remove('hidden');
             };
             
             window.fillGrid = function(elemId, gridTeam, winner) {
                 const div = document.getElementById(elemId); div.innerHTML = '';
                 const isWinner = (gridTeam === winner); 
-
                 window.game.state[gridTeam].onCourt.forEach(p => {
                     let btn = document.createElement('button'); 
                     btn.className = "h-12 w-12 rounded-full border border-gray-300 font-bold hover:bg-primary hover:text-white transition shadow-sm text-lg text-gray-900 bg-white"; 
                     btn.innerText = p.num;
-                    
                     btn.onclick = () => {
                         Array.from(document.getElementById('gridHome').children).forEach(c => c.classList.remove('bg-primary', 'text-white'));
                         Array.from(document.getElementById('gridAway').children).forEach(c => c.classList.remove('bg-primary', 'text-white'));
                         btn.classList.add('bg-primary', 'text-white');
-                        
                         window.game.state.tempPoint.actorTeam = gridTeam; 
                         window.game.state.tempPoint.actorNum = p.num;
-                        
                         window.showActions(gridTeam, isWinner);
                     }; 
                     div.appendChild(btn);
@@ -474,7 +494,6 @@
                 const actionsAway = document.getElementById('actionsAway');
                 actionsHome.classList.add('hidden');
                 actionsAway.classList.add('hidden');
-                
                 const targetDiv = (gridTeam === 'home') ? actionsHome : actionsAway;
                 targetDiv.innerHTML = '';
                 
@@ -486,7 +505,6 @@
                         <button onclick="window.finalizeScore('Feinte')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded hover:bg-green-100 transition">Feinte</button>
                     `;
                 } else {
-                    // Les nouvelles options de fautes demandées
                     targetDiv.innerHTML = `
                         <button onclick="window.finalizeScore('Attaque Filet')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded hover:bg-red-100 transition">Attaque Filet</button>
                         <button onclick="window.finalizeScore('Faute (Jeu/Récep)')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded hover:bg-red-100 transition">Faute (Jeu/Récep)</button>
@@ -497,14 +515,26 @@
                 targetDiv.classList.remove('hidden');
             };
             
-            window.finalizeScore = function(action) { window.game.scorePoint(window.game.state.tempPoint.winner, { action: action, actorTeam: window.game.state.tempPoint.actorTeam, actorNum: window.game.state.tempPoint.actorNum }); document.getElementById('scoreModal').classList.add('hidden'); window.updateScreen(); };
+            // SAUVEGARDE AUTO APRES CHAQUE ACTION !
+            window.finalizeScore = function(action) { 
+                window.game.scorePoint(window.game.state.tempPoint.winner, { action: action, actorTeam: window.game.state.tempPoint.actorTeam, actorNum: window.game.state.tempPoint.actorNum }); 
+                document.getElementById('scoreModal').classList.add('hidden'); 
+                window.updateScreen(); 
+                window.autoSync(); 
+            };
 
             window.openSub = function(team, idx) {
                 window.game.state.subTarget = { team, idx }; const sel = document.getElementById('subInSelect'); sel.innerHTML = ''; const currentIds = window.game.state[team].onCourt.map(p => p.num);
                 window.game.state[team].players.forEach(p => { if(!currentIds.includes(p.num)) { let opt = document.createElement('option'); opt.value = p.num; opt.innerText = `#${p.num} ${p.name}`; sel.appendChild(opt); }});
                 document.getElementById('subOutName').innerText = window.game.state[team].onCourt[idx].name; document.getElementById('subModal').classList.remove('hidden');
             };
-            window.confirmSub = function() { window.game.substitute(window.game.state.subTarget.team, window.game.state.subTarget.idx, document.getElementById('subInSelect').value); document.getElementById('subModal').classList.add('hidden'); window.updateScreen(); };
+            
+            window.confirmSub = function() { 
+                window.game.substitute(window.game.state.subTarget.team, window.game.state.subTarget.idx, document.getElementById('subInSelect').value); 
+                document.getElementById('subModal').classList.add('hidden'); 
+                window.updateScreen(); 
+                window.autoSync(); 
+            };
 
             window.endSet = function() { 
                 if(confirm("Confirmer la fin du set ?")) { 
@@ -515,41 +545,9 @@
                         document.getElementById('btnServeHome').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
                         document.getElementById('btnServeAway').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
                         window.updateScreen(); 
+                        window.autoSync(); 
                     } 
                 } 
-            };
-            
-            window.downloadBackup = function() { const a = document.createElement('a'); a.href = window.game.generateBackupJSON(); a.download = `VOLLEY_BACKUP_${Date.now()}.json`; document.body.appendChild(a); a.click(); a.remove(); };
-            
-            window.loadGameFromFile = function(input) {
-                const file = input.files[0]; if(!file) return; const r = new FileReader();
-                r.onload = (e) => {
-                    if(window.game.loadFromJSON(e.target.result)) { document.getElementById('setupModal').classList.add('hidden'); document.getElementById('gameUI').style.display = 'flex'; document.getElementById('preMatchBanner').classList.add('hidden'); document.getElementById('scoringControls').classList.remove('hidden'); window.updateScreen(); } else alert("Fichier invalide");
-                }; r.readAsText(file);
-            };
-
-            window.sendToDB = async function() {
-                if(!confirm("Synchroniser la fin du match avec le serveur ?")) return;
-                window.setSyncStatus('syncing');
-                const teamId = document.getElementById('teamSelect') ? document.getElementById('teamSelect').value : null;
-                const payload = {
-                    match_id: window.currentLiveMatchId, teamId: teamId,
-                    homeName: window.game.state.home.name, awayName: window.game.state.away.name, setsHome: window.game.state.home.sets, setsAway: window.game.state.away.sets,
-                    winner: window.game.state.home.sets > window.game.state.away.sets ? window.game.state.home.name : (window.game.state.away.sets > window.game.state.home.sets ? window.game.state.away.name : "En cours"),
-                    history: window.game.state.history,
-                    rosterHome: {all: window.game.state.home.players, court: window.game.state.home.onCourt}, rosterAway: {all: window.game.state.away.players, court: window.game.state.away.onCourt}
-                };
-                try {
-                    const res = await fetch('/api/save_match', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-                    const json = await res.json(); 
-                    if(json.status === "success") {
-                        window.setSyncStatus('success'); alert(json.message);
-                        window.currentLiveMatchId = null;
-                        const btn = document.getElementById('btnGoLive');
-                        btn.classList.remove('bg-red-600', 'text-white', 'border-red-600', 'animate-pulse');
-                        btn.innerHTML = `<span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">Go Live</span>`;
-                    } else { window.setSyncStatus('error'); alert(json.message); }
-                } catch(e) { window.setSyncStatus('error'); alert("Erreur Cloud : " + e); }
             };
         })();
     </script>
