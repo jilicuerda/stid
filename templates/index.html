@@ -6,7 +6,7 @@
     <title>VolleyLive Pro - Match Console</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;900&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     <script>
         tailwind.config = { theme: { extend: { colors: { "primary": "#135bec", "bg-light": "#f6f6f8", "bg-dark": "#101622" }, fontFamily: { "display": ["Lexend", "sans-serif"] }}}}
@@ -120,8 +120,6 @@
         <div class="flex items-center gap-2">
             <a href="/" class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-bold hover:bg-gray-100 transition mr-2"><span class="material-symbols-outlined text-sm">home</span> <span class="hidden lg:inline">Portail</span></a>
             <button id="btnGoLive" onclick="window.toggleLive()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-sm font-bold hover:bg-red-50 transition"><span class="material-symbols-outlined text-sm">sensors</span> <span class="hidden md:inline">Go Live</span></button>
-            <a href="/stats" target="_blank" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-800 text-sm font-bold hover:bg-blue-200 transition"><span class="material-symbols-outlined text-sm">query_stats</span> <span class="hidden xl:inline">Stats</span></a>
-            <button onclick="window.switchSides()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-bold border border-gray-300 hover:bg-gray-200"><span class="material-symbols-outlined text-sm">swap_horiz</span></button>
             <button onclick="window.sendToDB()" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary text-white text-sm font-semibold shadow-sm hover:bg-blue-700"><span class="material-symbols-outlined text-sm">cloud_upload</span> <span class="hidden sm:inline">Sync Fin</span></button>
         </div>
     </header>
@@ -134,11 +132,18 @@
 
         <div id="preMatchBanner" class="bg-blue-50 border-2 border-blue-400 rounded-xl p-6 text-center shadow-md animate-pulse">
             <h3 class="text-xl font-bold text-blue-800 mb-2">Préparation du Set <span id="prepSetNum">1</span></h3>
+            
             <div class="my-4 flex flex-col sm:flex-row justify-center items-center gap-4 bg-white/50 py-3 rounded-lg border border-blue-200 w-fit mx-auto px-6">
                 <span class="font-bold text-blue-900 uppercase text-sm tracking-widest">1er Service :</span>
                 <button id="btnServeHome" onclick="window.setFirstServer('home')" class="px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition">🏐 Nous</button>
                 <button id="btnServeAway" onclick="window.setFirstServer('away')" class="px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition">🏐 Eux</button>
+                
+                <div class="w-px h-8 bg-gray-300 mx-2 hidden sm:block"></div>
+                <button onclick="window.switchSides()" class="px-4 py-2 bg-slate-200 text-slate-800 rounded-xl text-sm font-bold shadow hover:bg-slate-300 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm">swap_horiz</span> Changer de terrain
+                </button>
             </div>
+
             <p class="text-sm text-blue-600 mt-4">Touchez un joueur pour échanger sa position, ou le remplacer par le banc.</p>
             <button id="preMatchSubBtn" onclick="window.openPreMatchSub()" class="hidden mx-auto mt-4 bg-yellow-500 text-white font-bold py-2 px-6 rounded-full shadow-lg hover:bg-yellow-600 transition flex items-center gap-2"><span class="material-symbols-outlined">swap_horiz</span> Remplacer ce joueur</button>
             <button onclick="window.startActualMatch()" class="mt-6 bg-green-600 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-green-700 transition transform hover:scale-105 text-lg">▶️ DÉBUTER LE MATCH</button>
@@ -378,6 +383,20 @@
                 document.getElementById('historyLog').innerHTML = s.history.slice(-4).reverse().map(h => `<div class="flex justify-between items-center border-b pb-1"><span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span><span class="text-xs bg-gray-100 px-2 rounded text-gray-800">${h.action} (${h.actor_num})</span></div>`).join('');
 
                 if (window.currentLiveMatchId && window.game.state.isStarted) window.silentUpdateLiveScore();
+
+                // ✨ EASTER EGG ZAKARIA ✨
+                if ((s.home.score === 20 && s.away.score === 4) || (s.away.score === 20 && s.home.score === 4)) {
+                    let egg = document.getElementById('easterEgg');
+                    if(!egg) {
+                        egg = document.createElement('div');
+                        egg.id = 'easterEgg';
+                        egg.className = "fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-2xl shadow-2xl text-sm font-black animate-bounce z-[200] border-2 border-white/50 cursor-pointer";
+                        egg.innerHTML = "✨ Application créée par Zakaria Hansali ✨";
+                        egg.onclick = () => egg.remove();
+                        document.body.appendChild(egg);
+                        setTimeout(() => { if(egg.parentNode) egg.remove(); }, 6000);
+                    }
+                }
             };
 
             window.toggleLive = async function() {
@@ -413,7 +432,7 @@
 
             window.scoreFromSide = function(side) { window.openScoreModal((side === 'left') ? (window.isHomeLeft ? 'home' : 'away') : (window.isHomeLeft ? 'away' : 'home')); };
             
-            // --- NOUVELLE LOGIQUE DU MODAL POINT (NOTRE EQUIPE EN HAUT) ---
+            // --- NOUVELLE LOGIQUE DU MODAL POINT ---
             window.openScoreModal = function(winner) {
                 window.game.state.tempPoint = { winner: winner, actorTeam: null, actorNum: null };
                 document.getElementById('scoreTitle').innerText = `Point pour ${window.game.state[winner].name}`;
@@ -421,7 +440,6 @@
                 document.getElementById('actionsHome').classList.add('hidden'); 
                 document.getElementById('actionsAway').classList.add('hidden');
                 
-                // Remplit les deux grilles (Home est toujours en haut)
                 window.fillGrid('gridHome', 'home', winner); 
                 window.fillGrid('gridAway', 'away', winner);
                 
@@ -430,7 +448,7 @@
             
             window.fillGrid = function(elemId, gridTeam, winner) {
                 const div = document.getElementById(elemId); div.innerHTML = '';
-                const isWinner = (gridTeam === winner); // Cette équipe a-t-elle gagné le point ?
+                const isWinner = (gridTeam === winner); 
 
                 window.game.state[gridTeam].onCourt.forEach(p => {
                     let btn = document.createElement('button'); 
@@ -438,7 +456,6 @@
                     btn.innerText = p.num;
                     
                     btn.onclick = () => {
-                        // Nettoyer les sélections
                         Array.from(document.getElementById('gridHome').children).forEach(c => c.classList.remove('bg-primary', 'text-white'));
                         Array.from(document.getElementById('gridAway').children).forEach(c => c.classList.remove('bg-primary', 'text-white'));
                         btn.classList.add('bg-primary', 'text-white');
@@ -462,20 +479,19 @@
                 targetDiv.innerHTML = '';
                 
                 if (isWinner) {
-                    // C'est une BONNE action (Attaque, Block, Ace)
                     targetDiv.innerHTML = `
-                        <button onclick="window.finalizeScore('Attaque')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Attaque</button>
-                        <button onclick="window.finalizeScore('Block')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Block</button>
-                        <button onclick="window.finalizeScore('Ace')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Ace</button>
-                        <button onclick="window.finalizeScore('Feinte')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded">Feinte</button>
+                        <button onclick="window.finalizeScore('Attaque')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded hover:bg-green-100 transition">Attaque</button>
+                        <button onclick="window.finalizeScore('Block')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded hover:bg-green-100 transition">Block</button>
+                        <button onclick="window.finalizeScore('Ace')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded hover:bg-green-100 transition">Ace</button>
+                        <button onclick="window.finalizeScore('Feinte')" class="p-3 bg-green-50 text-green-900 border-l-4 border-green-500 font-bold rounded hover:bg-green-100 transition">Feinte</button>
                     `;
                 } else {
-                    // C'est une MAUVAISE action (Erreur, Faute)
+                    // Les nouvelles options de fautes demandées
                     targetDiv.innerHTML = `
-                        <button onclick="window.finalizeScore('Attaque Out')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Attaque Out</button>
-                        <button onclick="window.finalizeScore('Faute Filet')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Faute Filet</button>
-                        <button onclick="window.finalizeScore('Faute Service')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Service Raté</button>
-                        <button onclick="window.finalizeScore('Faute Main')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded">Faute Main</button>
+                        <button onclick="window.finalizeScore('Attaque Filet')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded hover:bg-red-100 transition">Attaque Filet</button>
+                        <button onclick="window.finalizeScore('Faute (Jeu/Récep)')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded hover:bg-red-100 transition">Faute (Jeu/Récep)</button>
+                        <button onclick="window.finalizeScore('Faute Filet / Arbitre')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded hover:bg-red-100 transition">Faute Filet / Arbitre</button>
+                        <button onclick="window.finalizeScore('Service Raté')" class="p-3 bg-red-50 text-red-900 border-l-4 border-red-500 font-bold rounded hover:bg-red-100 transition">Service Raté</button>
                     `;
                 }
                 targetDiv.classList.remove('hidden');
