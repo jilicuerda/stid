@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Agg') # Obligatoire pour le web
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import matplotlib.ticker as ticker
@@ -7,19 +7,17 @@ from matplotlib.lines import Line2D
 import io
 import base64
 import math
-import gc # Nettoyeur de mémoire RAM
+import gc
 
-# ======================================================================
-# 1. FONCTIONS UTILITAIRES
-# ======================================================================
+# Configuration des actions considérées comme des fautes d'attaque/jeu
+FAUTES_ATT_LISTE = ["Attaque Out", "Attaque Filet", "Faute Filet / Arbitre", "Faute (Jeu/Récep)"]
+
 def fig_to_base64(fig):
-    """Convertit le graphique en image pour le site web et vide la RAM."""
     buf = io.BytesIO()
-    # dpi=80 au lieu de 100 pour calculer beaucoup plus vite sur le serveur Render
-    fig.savefig(buf, format='png', bbox_inches='tight', dpi=80) 
+    fig.savefig(buf, format='png', bbox_inches='tight', dpi=80)
     plt.close(fig)
-    plt.close('all') # Force la fermeture de toutes les fenêtres invisibles
-    gc.collect() # Ordonne au serveur de vider sa mémoire RAM immédiatement
+    plt.close('all')
+    gc.collect()
     return base64.b64encode(buf.getvalue()).decode('utf-8')
 
 def extraire_positions(rot_str):
@@ -36,12 +34,8 @@ def sont_similaires(rot1_str, rot2_str, seuil=4):
     communs = sum(1 for a, b in zip(r1, r2) if a == b)
     return communs >= seuil
 
-# ======================================================================
-# 2. GRAPHIQUES (Code du coéquipier adapté)
-# ======================================================================
 def tracer_duel_chronologique_annote(history_set, nom_h, nom_a, num_set):
     if not history_set: return None
-    
     try:
         color_h, color_a = '#3498db', '#e67e22' 
         sequences, curr_h, curr_a = [], 0, 0
@@ -52,7 +46,7 @@ def tracer_duel_chronologique_annote(history_set, nom_h, nom_a, num_set):
 
         serveurs_vus = set()
         serveurs_vus.add((c_team, c_num))
-        changement_sequence_indices = []
+        changement_indices = []
 
         for pt in history_set:
             s_team = pt.get("server_team")
@@ -60,66 +54,53 @@ def tracer_duel_chronologique_annote(history_set, nom_h, nom_a, num_set):
             
             if s_num != c_num or s_team != c_team:
                 sequences.append({"team": c_team, "player": c_num, "pts": pts_serie, "start": start_score})
-                
                 if (s_team, s_num) in serveurs_vus:
                     serveurs_vus = set()
-                    changement_sequence_indices.append(len(sequences)) 
-
+                    changement_indices.append(len(sequences)) 
                 serveurs_vus.add((s_team, s_num))
                 start_score = curr_h if s_team == nom_h else curr_a
-                c_team, c_num = s_team, s_num
-                pts_serie = 1 
+                c_team, c_num, pts_serie = s_team, s_num, 1 
 
             if pt.get("winner_team") == s_team:
                 pts_serie += 1
-                
             curr_h, curr_a = pt.get("score_dom", 0), pt.get("score_ext", 0)
 
         sequences.append({"team": c_team, "player": c_num, "pts": pts_serie, "start": start_score})
 
-        fig, ax = plt.subplots(figsize=(20, 8))
-        x_pos, max_score = 0, 0
+        fig, ax = plt.subplots(figsize=(20, 7))
+        x_pos, max_s = 0, 0
         labels, colors = [], []
         
         for seq in sequences:
             col = color_h if seq["team"] == nom_h else color_a
-            ax.bar(x_pos, seq["pts"], bottom=seq["start"], color=col, edgecolor='black', alpha=0.85, width=0.7)
+            ax.bar(x_pos, seq["pts"], bottom=seq["start"], color=col, edgecolor='black', alpha=0.8, width=0.7)
             labels.append(seq["player"])
             colors.append(col)
-            max_score = max(max_score, seq["start"] + seq["pts"])
+            max_s = max(max_s, seq["start"] + seq["pts"])
             x_pos += 1
 
-        lim_y = max(25, max_score + 2)
-        ax.set_ylim(0, lim_y)
+        ax.set_ylim(0, max(25, max_s + 1))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-        ax.set_ylabel("Score Cumulé", fontsize=12, fontweight='bold')
         
         ax.set_xticks(range(len(labels)))
         xtick_labels = ax.set_xticklabels(labels, fontweight='bold', fontsize=11)
         for i, lbl in enumerate(xtick_labels): lbl.set_color(colors[i])
 
-        limites_completes = [0] + changement_sequence_indices + [len(sequences)]
-        for i in range(len(limites_completes) - 1):
-            debut_idx = limites_completes[i]
-            fin_idx = limites_completes[i+1]
-            pos_texte_x = (debut_idx + fin_idx - 1) / 2
-            
-            ax.text(pos_texte_x, -2.5, f"{i+1}ère séquence" if i==0 else f"{i+1}ème séquence", ha='center', va='top', fontsize=10, fontweight='bold', color='#555')
-            if i < len(limites_completes) - 2:
-                ax.axvline(x=fin_idx - 0.5, color='grey', linestyle='--', linewidth=1, alpha=0.6)
+        lims = [0] + changement_indices + [len(sequences)]
+        for i in range(len(lims) - 1):
+            debut_idx = lims[i]
+            fin_idx = lims[i+1]
+            ax.text((debut_idx + fin_idx - 1) / 2, -2, f"Tour {i+1}", ha='center', va='top', fontweight='bold', color='#555')
+            if i < len(lims) - 2: ax.axvline(x=fin_idx - 0.5, color='grey', linestyle='--', alpha=0.5)
 
-        legend_elements = [Line2D([0], [0], color=color_h, lw=6, label=f" {nom_h} "), Line2D([0], [0], color=color_a, lw=6, label=f" {nom_a} ")]
-        ax.legend(handles=legend_elements, loc='upper left', fontsize=11, frameon=True, shadow=True, borderpad=1)
-
-        ax.set_title(f"ÉVOLUTION DU SCORE - SET {num_set}", fontsize=16, fontweight='bold', pad=25)
-        ax.grid(axis='y', linestyle='-', alpha=0.2) 
+        ax.legend(handles=[Line2D([0],[0],color=color_h,lw=6,label=nom_h), Line2D([0],[0],color=color_a,lw=6,label=nom_a)], loc='upper left')
+        ax.set_title(f"ÉVOLUTION DU SCORE - SET {num_set}", fontsize=14, fontweight='bold', pad=20)
+        ax.grid(axis='y', alpha=0.2)
         plt.tight_layout()
         plt.subplots_adjust(bottom=0.15)
         
         return fig_to_base64(fig)
-    except Exception as e:
-        print(f"Erreur graphe chrono : {e}")
-        return None
+    except: return None
 
 def dessiner_un_terrain(ax, config_point, stats, couleur, nom_h, nom_a, equipe_au_service):
     ax.add_patch(patches.Rectangle((0, 0), 18, 9, linewidth=2, edgecolor='black', facecolor='#fafafa'))
@@ -129,139 +110,144 @@ def dessiner_un_terrain(ax, config_point, stats, couleur, nom_h, nom_a, equipe_a
     pos_h, pos_a = extraire_positions(config_point['rot_home']), extraire_positions(config_point['rot_away'])
     
     for p, n in pos_h.items():
-        if equipe_au_service == nom_h and p == 'I': ax.text(-1.5, 1.5, str(n), fontsize=18, weight='bold', color='royalblue', ha='center')
-        else: ax.text(coords_g[p][0], coords_g[p][1], str(n), fontsize=16, weight='bold', color='royalblue', ha='center', va='center')
+        c = 'royalblue' if not (equipe_au_service == nom_h and p == 'I') else 'blue'
+        if equipe_au_service == nom_h and p == 'I': ax.text(-1.5, 1.5, str(n), fontsize=18, weight='bold', color=c, ha='center')
+        else: ax.text(coords_g[p][0], coords_g[p][1], str(n), fontsize=15, weight='bold', color=c, ha='center', va='center')
     for p, n in pos_a.items():
-        if equipe_au_service == nom_a and p == 'I': ax.text(19.5, 7.5, str(n), fontsize=18, weight='bold', color='darkorange', ha='center')
-        else: ax.text(coords_d[p][0], coords_d[p][1], str(n), fontsize=16, weight='bold', color='darkorange', ha='center', va='center')
-
+        c = 'darkorange' if not (equipe_au_service == nom_a and p == 'I') else 'red'
+        if equipe_au_service == nom_a and p == 'I': ax.text(19.5, 7.5, str(n), fontsize=18, weight='bold', color=c, ha='center')
+        else: ax.text(coords_d[p][0], coords_d[p][1], str(n), fontsize=15, weight='bold', color=c, ha='center', va='center')
+    
     diff = stats['m'] - stats['e']
-    txt = f"pts marqués: {stats['m']} | encaissés: {stats['e']}\ndifférence: {diff:+d}"
-    ax.text(9, -2, txt, fontsize=10, ha='center', va='top', weight='bold', bbox=dict(facecolor='white', alpha=0.8, edgecolor=couleur, boxstyle='round'))
+    ax.text(9, -1.5, f"Points gagnés: {stats['m']} | Perdus: {stats['e']}\nBilan: {diff:+d}", fontsize=9, ha='center', weight='bold', bbox=dict(facecolor='white', alpha=0.7, edgecolor=couleur))
     ax.axis('off')
 
 def afficher_grille_rotations(liste_stats, nom_h, nom_a, equipe_service, couleur_theme, titre):
     n_rot = len(liste_stats)
     if n_rot == 0: return None
     try:
-        n_cols = 3
-        n_rows = math.ceil(n_rot / n_cols)
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 5 * n_rows), squeeze=False)
+        n_rows = math.ceil(n_rot / 3)
+        fig, axes = plt.subplots(n_rows, 3, figsize=(18, 4.5 * n_rows), squeeze=False)
         plt.subplots_adjust(hspace=0.5)
         axes_flat = axes.flatten()
-        for i in range(len(axes_flat)):
-            if i < n_rot: dessiner_un_terrain(axes_flat[i], liste_stats[i]['point'], liste_stats[i], couleur_theme, nom_h, nom_a, equipe_service)
-            else: axes_flat[i].axis('off')
-        
+        for i, ax in enumerate(axes_flat):
+            if i < n_rot: dessiner_un_terrain(ax, liste_stats[i]['point'], liste_stats[i], couleur_theme, nom_h, nom_a, equipe_service)
+            else: ax.axis('off')
         fig.suptitle(titre, fontsize=18, fontweight='bold', y=1.02)
         return fig_to_base64(fig)
-    except Exception as e:
-        print(f"Erreur grille rotation : {e}")
-        return None
+    except: return None
 
-# ======================================================================
-# 3. STATISTIQUES GLOBALES (Calcul pur, pas de matplotlib ici)
-# ======================================================================
-def calculer_stats_individuelles(tous_points, roster_home, roster_away, nom_h, nom_a):
-    stats_home = {}
-    stats_away = {}
-    
-    licences_home = {str(p.get('num', '')): p.get('licence', 'N/A') for p in roster_home.get('all', []) if p.get('num')}
-
-    for pt in tous_points:
-        actor_num = str(pt.get("actor_num", ""))
-        actor_side = pt.get("actor_team")
-        action = pt.get("action")
-        winner_team = pt.get("winner_team")
-
-        if actor_num and actor_side and actor_num != 'None':
-            target_stats = stats_home if actor_side == 'home' else stats_away
-            target_team_name = nom_h if actor_side == 'home' else nom_a
-            
-            if winner_team == target_team_name:
-                if actor_num not in target_stats: target_stats[actor_num] = {"num": actor_num, "Pts":0, "Ace":0, "Bloc":0, "Att":0, "Feinte":0, "Serv_T":0, "Serv_F":0}
-                s = target_stats[actor_num]
-                s["Pts"] += 1
-                if action == "Ace": s["Ace"] += 1
-                elif action == "Block": s["Bloc"] += 1
-                elif action == "Attaque": s["Att"] += 1
-                elif action == "Feinte": s["Feinte"] += 1
-
-        serv_num = str(pt.get("server_num", ""))
-        serv_team_name = pt.get("server_team")
-
-        if serv_num and serv_team_name and serv_num != 'None':
-            is_home = (serv_team_name == nom_h)
-            target_stats = stats_home if is_home else stats_away
-            
-            if serv_num not in target_stats: target_stats[serv_num] = {"num": serv_num, "Pts":0, "Ace":0, "Bloc":0, "Att":0, "Feinte":0, "Serv_T":0, "Serv_F":0}
-            
-            target_stats[serv_num]["Serv_T"] += 1
-            if action == "Faute Service":
-                target_stats[serv_num]["Serv_F"] += 1
-
-    res_home = list(stats_home.values())
-    res_away = list(stats_away.values())
-    
-    for r in res_home: 
-        r["licence"] = licences_home.get(r["num"], "N/A")
-        r["ace_pct"] = round((r['Ace']/r['Serv_T']*100), 1) if r["Serv_T"] > 0 else 0
-        r["srv_pct"] = round(((r['Serv_T'] - r['Serv_F'])/r['Serv_T']*100), 1) if r["Serv_T"] > 0 else 0
+def tracer_repartition_roles_base64(stats_dict, mapping_roles, nom_equipe):
+    try:
+        repart = {}
+        for num, s in stats_dict.items():
+            r = mapping_roles.get(str(num), "?")
+            repart[r] = repart.get(r, 0) + s["Pts"]
+        roles = [r for r in repart.keys() if repart[r] > 0]
+        if not roles: return None
         
-    for r in res_away: 
-        r["ace_pct"] = round((r['Ace']/r['Serv_T']*100), 1) if r["Serv_T"] > 0 else 0
-        r["srv_pct"] = round(((r['Serv_T'] - r['Serv_F'])/r['Serv_T']*100), 1) if r["Serv_T"] > 0 else 0
+        fig, ax = plt.subplots(figsize=(6, 5))
+        ax.pie([repart[r] for r in roles], labels=roles, autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
+        ax.set_title(f"RÉPARTITION PAR POSTE\n{nom_equipe.upper()}", fontweight='bold')
+        return fig_to_base64(fig)
+    except: return None
 
-    return sorted(res_home, key=lambda x: x["Pts"], reverse=True), sorted(res_away, key=lambda x: x["Pts"], reverse=True)
+def calculer_stats_individuelles(tous_points, roster_home, roster_away, nom_h, nom_a):
+    s_h, s_a = {}, {}
+    licences_h = {str(p.get('num', '')): p.get('licence', 'N/A') for p in roster_home.get('all', []) if p.get('num')}
+    roles_h = {str(p.get('num', '')): p.get('role', '?') for p in roster_home.get('all', []) if p.get('num')}
+    roles_a = {str(p.get('num', '')): p.get('role', '?') for p in roster_away.get('all', []) if p.get('num')}
+    
+    for pt in tous_points:
+        act_n, act_s, action, win = pt.get("actor_num"), pt.get("actor_team"), pt.get("action"), pt.get("winner_team")
+        srv_n, srv_t = pt.get("server_num"), pt.get("server_team")
+        
+        if act_n and act_s and act_n != 'None':
+            t = s_h if act_s == "home" else s_a
+            if act_n not in t: t[act_n] = {"Pts":0, "Ace":0, "Bloc":0, "Att":0, "Feinte":0, "Serv_T":0, "Serv_F":0, "Err_Att":0}
+            team_name = nom_h if act_s == "home" else nom_a
+            if win == team_name:
+                t[act_n]["Pts"] += 1
+                if action == "Ace": t[act_n]["Ace"] += 1
+                elif action == "Block": t[act_n]["Bloc"] += 1
+                elif action == "Attaque": t[act_n]["Att"] += 1
+                elif action == "Feinte": t[act_n]["Feinte"] += 1
+            elif action in FAUTES_ATT_LISTE:
+                t[act_n]["Err_Att"] += 1
+                
+        if srv_n and srv_t and srv_n != 'None':
+            side = "home" if srv_t == nom_h else "away"
+            t = s_h if side == "home" else s_a
+            if srv_n not in t: t[srv_n] = {"Pts":0, "Ace":0, "Bloc":0, "Att":0, "Feinte":0, "Serv_T":0, "Serv_F":0, "Err_Att":0}
+            t[srv_n]["Serv_T"] += 1
+            if action in ["Faute Service", "Service Raté"]: t[srv_n]["Serv_F"] += 1
+
+    res_h = []
+    for n, s in s_h.items():
+        s["num"] = n; s["poste"] = roles_h.get(n, "?"); s["licence"] = licences_h.get(n, "N/A")
+        s["ratio_pf"] = round(s["Pts"] / s["Err_Att"], 2) if s["Err_Att"] > 0 else s["Pts"]
+        s["srv_pct"] = round((s["Serv_T"] - s["Serv_F"]) / s["Serv_T"] * 100, 1) if s["Serv_T"] > 0 else 0
+        res_h.append(s)
+        
+    res_a = []
+    for n, s in s_a.items():
+        s["num"] = n; s["poste"] = roles_a.get(n, "?")
+        s["ratio_pf"] = round(s["Pts"] / s["Err_Att"], 2) if s["Err_Att"] > 0 else s["Pts"]
+        s["srv_pct"] = round((s["Serv_T"] - s["Serv_F"]) / s["Serv_T"] * 100, 1) if s["Serv_T"] > 0 else 0
+        res_a.append(s)
+
+    pie_h = tracer_repartition_roles_base64(s_h, roles_h, nom_h)
+    pie_a = tracer_repartition_roles_base64(s_a, roles_a, nom_a)
+    
+    return sorted(res_h, key=lambda x: x["Pts"], reverse=True), sorted(res_a, key=lambda x: x["Pts"], reverse=True), pie_h, pie_a
 
 def calculer_efficacite_rotations(tous_points, nom_h, nom_a):
-    stats_rot_h, stats_rot_a = [], []
-
+    r_h, r_a = [], []
     for pt in tous_points:
-        kh, ka = str(pt.get('rot_home', '')), str(pt.get('rot_away', ''))
-        win, serv_team = pt.get('winner_team'), pt.get('server_team')
-
-        trouve_h = False
-        for s in stats_rot_h:
-            if sont_similaires(s['key'], kh):
-                if win == nom_h:
-                    if serv_team == nom_h: s['ms'] += 1 
-                    else: s['mr'] += 1                  
+        kh, ka = pt.get('rot_home'), pt.get('rot_away')
+        win, srv_t, action = pt.get('winner_team'), pt.get('server_team'), pt.get('action')
+        act_s = pt.get('actor_team')
+        
+        # Home
+        trouve = False
+        for r in r_h:
+            if sont_similaires(r['key'], kh):
+                if srv_t == nom_h: 
+                    r['ts'] += 1
+                    if win == nom_h: r['ms'] += 1
                 else:
-                    if serv_team == nom_h: s['es'] += 1 
-                    else: s['er'] += 1                  
-                trouve_h = True; break
-        if not trouve_h:
-            new_rot = {'key': kh, 'ms': 0, 'mr': 0, 'es': 0, 'er': 0}
-            if win == nom_h:
-                if serv_team == nom_h: new_rot['ms'] = 1
-                else: new_rot['mr'] = 1
-            else:
-                if serv_team == nom_h: new_rot['es'] = 1
-                else: new_rot['er'] = 1
-            stats_rot_h.append(new_rot)
-
-        trouve_a = False
-        for s in stats_rot_a:
-            if sont_similaires(s['key'], ka):
-                if win == nom_a:
-                    if serv_team == nom_a: s['ms'] += 1
-                    else: s['mr'] += 1
+                    r['tr'] += 1
+                    if win == nom_h: r['mr'] += 1
+                if act_s == "home" and win != nom_h and action in FAUTES_ATT_LISTE: r['fa'] += 1
+                trouve = True; break
+        if not trouve:
+            is_s = (srv_t == nom_h)
+            r_h.append({'key': kh, 'ms': 1 if (is_s and win==nom_h) else 0, 'mr': 1 if (not is_s and win==nom_h) else 0,
+                        'ts': 1 if is_s else 0, 'tr': 1 if not is_s else 0, 'fa': 1 if (act_s == "home" and win != nom_h and action in FAUTES_ATT_LISTE) else 0})
+            
+        # Away
+        trouve = False
+        for r in r_a:
+            if sont_similaires(r['key'], ka):
+                if srv_t == nom_a: 
+                    r['ts'] += 1
+                    if win == nom_a: r['ms'] += 1
                 else:
-                    if serv_team == nom_a: s['es'] += 1
-                    else: s['er'] += 1
-                trouve_a = True; break
-        if not trouve_a:
-            new_rot = {'key': ka, 'ms': 0, 'mr': 0, 'es': 0, 'er': 0}
-            if win == nom_a:
-                if serv_team == nom_a: new_rot['ms'] = 1
-                else: new_rot['mr'] = 1
-            else:
-                if serv_team == nom_a: new_rot['es'] = 1
-                else: new_rot['er'] = 1
-            stats_rot_a.append(new_rot)
+                    r['tr'] += 1
+                    if win == nom_a: r['mr'] += 1
+                if act_s == "away" and win != nom_a and action in FAUTES_ATT_LISTE: r['fa'] += 1
+                trouve = True; break
+        if not trouve:
+            is_s = (srv_t == nom_a)
+            r_a.append({'key': ka, 'ms': 1 if (is_s and win==nom_a) else 0, 'mr': 1 if (not is_s and win==nom_a) else 0,
+                        'ts': 1 if is_s else 0, 'tr': 1 if not is_s else 0, 'fa': 1 if (act_s == "away" and win != nom_a and action in FAUTES_ATT_LISTE) else 0})
 
-    for s in stats_rot_h: s['diff'] = (s['ms'] + s['mr']) - (s['es'] + s['er'])
-    for s in stats_rot_a: s['diff'] = (s['ms'] + s['mr']) - (s['es'] + s['er'])
+    for l in [r_h, r_a]:
+        for r in l:
+            m_tot = r['ms'] + r['mr']
+            r['recep_pct'] = round(r['mr'] / r['tr'] * 100, 1) if r['tr'] > 0 else 0
+            r['serv_pct'] = round(r['ms'] / r['ts'] * 100, 1) if r['ts'] > 0 else 0
+            r['ratio_pf'] = round(m_tot / r['fa'], 2) if r['fa'] > 0 else m_tot
+            r['bilan'] = m_tot - ((r['ts'] - r['ms']) + (r['tr'] - r['mr']))
 
-    return sorted(stats_rot_h, key=lambda x: x['diff'], reverse=True), sorted(stats_rot_a, key=lambda x: x['diff'], reverse=True)
+    return sorted(r_h, key=lambda x: x['bilan'], reverse=True), sorted(r_a, key=lambda x: x['bilan'], reverse=True)
