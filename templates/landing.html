@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VolleyLive Pro - Portail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Lexend', sans-serif; }</style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col items-center justify-center p-6">
+    
+    <div class="text-center mb-12">
+        <div class="inline-block p-4 bg-blue-100 text-blue-600 rounded-full mb-4">
+            <span class="material-symbols-outlined text-5xl">sports_volleyball</span>
+        </div>
+        <h1 class="text-5xl font-black text-slate-800 tracking-tight mb-2">VolleyLive <span class="text-blue-600">Pro</span></h1>
+        <p class="text-slate-500 font-medium">Choisissez un module pour commencer</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
+        
+        <a href="/console" class="group bg-white p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all border border-slate-200 flex items-start gap-6">
+            <div class="p-4 bg-green-100 text-green-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <span class="material-symbols-outlined text-3xl">play_circle</span>
+            </div>
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-1">Match en Direct</h2>
+                <p class="text-sm text-slate-500">Ouvrir la console d'arbitrage et enregistrer les actions point par point.</p>
+            </div>
+        </a>
+
+        <a href="/stats" class="group bg-white p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all border border-slate-200 flex items-start gap-6">
+            <div class="p-4 bg-purple-100 text-purple-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <span class="material-symbols-outlined text-3xl">query_stats</span>
+            </div>
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-1">Analyses & Stats</h2>
+                <p class="text-sm text-slate-500">Visualiser les rapports d'efficacité, les rotations et les graphiques IA.</p>
+            </div>
+        </a>
+
+        <a href="/extraction" class="group bg-white p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all border border-slate-200 flex items-start gap-6">
+            <div class="p-4 bg-orange-100 text-orange-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <span class="material-symbols-outlined text-3xl">document_scanner</span>
+            </div>
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-1">Extraction PDF</h2>
+                <p class="text-sm text-slate-500">Importer des feuilles de match PDF FFVB pour numériser l'historique.</p>
+            </div>
+        </a>
+
+        <a href="/admin" class="group bg-white p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all border border-slate-200 flex items-start gap-6">
+            <div class="p-4 bg-slate-100 text-slate-600 rounded-2xl group-hover:scale-110 transition-transform">
+                <span class="material-symbols-outlined text-3xl">settings</span>
+            </div>
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-1">Administration</h2>
+                <p class="text-sm text-slate-500">Gérer les clubs, les équipes et les accès utilisateurs (Super Admin).</p>
+            </div>
+        </a>
+
+    </div>
+
+    <div class="mt-12 text-center">
+        {% if session.get('user_id') %}
+            <p class="text-sm text-slate-500 mb-2">Connecté en tant que <span class="font-bold text-slate-800">{{ session.get('username') }}</span></p>
+            <a href="/logout" class="text-red-500 text-sm font-bold hover:underline">Déconnexion</a>
+        {% else %}
+            <a href="/login" class="text-blue-500 text-sm font-bold hover:underline">Se connecter à un compte</a>
+        {% endif %}
+    </div>
+
+</body>
+</html>
