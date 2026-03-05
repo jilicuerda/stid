@@ -1,6 +1,8 @@
 import os
 import json
 import tempfile
+import re
+import unicodedata
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from flask_cors import CORS
 from sqlalchemy import create_engine, text
@@ -37,6 +39,34 @@ def superadmin_required(f):
             return "Accès refusé.", 403
         return f(*args, **kwargs)
     return decorated_function
+
+# ======================================================================
+# LOGO MATCHING ENGINE
+# ======================================================================
+def find_logo(team_name):
+    """Cherche un logo correspondant au nom de l'équipe (Fuzzy Matching)."""
+    if not team_name: return ""
+    
+    # Nettoie le nom de l'équipe: minuscules, sans accents, sans espaces
+    clean_name = unicodedata.normalize('NFKD', str(team_name)).encode('ASCII', 'ignore').decode('utf-8').lower()
+    clean_name = re.sub(r'[^a-z0-9]', '', clean_name)
+    
+    logos_dir = os.path.join(app.root_path, 'static', 'logos')
+    if not os.path.exists(logos_dir): 
+        os.makedirs(logos_dir, exist_ok=True)
+        return ""
+        
+    for filename in os.listdir(logos_dir):
+        if filename.endswith(('.png', '.jpg', '.jpeg', '.webp', '.svg')):
+            # Nettoie le nom du fichier image
+            clean_filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode('utf-8').lower()
+            clean_filename = re.sub(r'[^a-z0-9]', '', clean_filename.rsplit('.', 1)[0])
+            
+            # Si le nom de l'équipe est dans le fichier ou inversement
+            if clean_name in clean_filename or clean_filename in clean_name:
+                return f"/static/logos/{filename}"
+                
+    return "" # Retourne vide si non trouvé, le frontend gérera les initiales
 
 # --- PAGE D'ACCUEIL ---
 @app.route('/')
@@ -100,7 +130,40 @@ def get_last_roster(team_id):
             return jsonify({"status": "empty"})
     except Exception as e: return jsonify({"status": "error", "message": "Erreur BDD"}), 200
 
-# --- SAUVEGARDE AUTO EN TEMPS REEL ---
+@app.route('/api/go_live', methods=['POST'])
+@login_required
+def go_live():
+    data = request.json
+    try:
+        with engine.connect() as conn:
+            trans = conn.begin()
+            result = conn.execute(text("""
+                INSERT INTO matches (club_id, team_id, team_home, team_away, current_set, score_home, score_away, sets_home, sets_away, is_live, roster_home, roster_away)
+                VALUES (:cid, :tid, :th, :ta, :cs, :sh, :sa, :setsh, :setsa, TRUE, :rh, :ra) RETURNING id
+            """), {
+                "cid": session.get('club_id'), "tid": data.get('teamId'), "th": data.get('homeName'), "ta": data.get('awayName'),
+                "cs": data.get('set', 1), "sh": data.get('scoreHome', 0), "sa": data.get('scoreAway', 0), "setsh": data.get('setsHome', 0), "setsa": data.get('setsAway', 0),
+                "rh": json.dumps(data.get('rosterHome', {})), "ra": json.dumps(data.get('rosterAway', {}))
+            })
+            match_id = result.fetchone()[0]
+            trans.commit()
+            return jsonify({"status": "success", "match_id": match_id})
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
+
+@app.route('/api/update_live', methods=['POST'])
+@login_required
+def update_live():
+    data = request.json
+    if not data.get('match_id'): return jsonify({"error": "No match ID"}), 400
+    try:
+        with engine.connect() as conn:
+            trans = conn.begin()
+            conn.execute(text("UPDATE matches SET current_set=:cs, score_home=:sh, score_away=:sa, sets_home=:setsh, sets_away=:setsa WHERE id=:mid"), 
+                         {"cs": data.get('set', 1), "sh": data.get('scoreHome', 0), "sa": data.get('scoreAway', 0), "setsh": data.get('setsHome', 0), "setsa": data.get('setsAway', 0), "mid": data['match_id']})
+            trans.commit()
+            return jsonify({"status": "success"})
+    except Exception: return jsonify({"status": "error"}), 200
+
 @app.route('/api/save_match', methods=['POST'])
 @login_required
 def save_match():
@@ -167,7 +230,6 @@ def save_match():
         print("ERREUR SAUVEGARDE:", e)
         return jsonify({"status": "error", "message": "Erreur BDD"}), 200
 
-# --- VUE SPECTATEUR ---
 @app.route('/live')
 @login_required
 def live_page(): return render_template('live.html')
@@ -181,7 +243,6 @@ def live_matches_api():
             return jsonify([{"id": m[0], "team_home": m[1], "team_away": m[2], "current_set": m[3], "score_home": m[4], "score_away": m[5], "sets_home": m[6], "sets_away": m[7]} for m in matches])
     except Exception: return jsonify([])
 
-# --- ROUTES EXTRACTION PDF ---
 @app.route('/extraction')
 @login_required
 def extraction_page(): return render_template('extraction.html')
@@ -225,22 +286,26 @@ def stats_page(): return render_template('stats.html')
 def get_completed_matches():
     try:
         with engine.connect() as conn:
-            matches = conn.execute(text("SELECT id, team_home, team_away, created_at, winner, is_live FROM matches WHERE club_id = :cid ORDER BY created_at DESC"), {"cid": session.get('club_id')}).fetchall()
+            matches = conn.execute(text("SELECT id, team_home, team_away, created_at, winner, is_live, sets_home, sets_away FROM matches WHERE club_id = :cid ORDER BY created_at DESC"), {"cid": session.get('club_id')}).fetchall()
             result = []
             for m in matches:
-                t_home = m[1] if m[1] else "Eq1"
-                t_away = m[2] if m[2] else "Eq2"
-                date_val = str(m[3])[:10] if m[3] else "?"
+                # Utilisation du moteur de recherche de logos
+                logo_h = find_logo(m[1])
+                logo_a = find_logo(m[2])
                 
-                # Tag Visuel si le match est en direct
-                if m[5]: # is_live == True
-                    status = "🔴 EN DIRECT"
-                else:
-                    status = f"Victoire: {m[4]}" if m[4] else "Terminé"
-                    
-                result.append({"id": m[0], "title": f"{t_home} vs {t_away} ({date_val}) - {status}"})
+                result.append({
+                    "id": m[0], 
+                    "team_home": m[1] if m[1] else "Eq1", 
+                    "team_away": m[2] if m[2] else "Eq2", 
+                    "logo_home": logo_h,
+                    "logo_away": logo_a,
+                    "score": f"{m[6]} - {m[7]}",
+                    "is_live": m[5]
+                })
             return jsonify(result)
-    except Exception as e: return jsonify({"error": str(e)}), 500
+    except Exception as e: 
+        print(f"Erreur DB API Matchs: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/match_stats/<int:match_id>')
 @login_required
@@ -261,7 +326,7 @@ def get_match_stats(match_id):
                 FROM points WHERE match_id = :mid ORDER BY id ASC
             """), {"mid": match_id}).fetchall()
             
-            if not points or len(points) == 0: return jsonify({"error": "Ce match vient de commencer, aucun point enregistré. (Score 0-0)"}), 400
+            if not points or len(points) == 0: return jsonify({"error": "Ce match ne contient aucun point. (Score 0-0)"}), 400
                 
             tous_points = []
             sets_list = set()
@@ -323,7 +388,6 @@ def get_match_stats(match_id):
         print(f"ERREUR GENERATION STATS : {e}")
         return jsonify({"error": f"Erreur de calcul des statistiques : {str(e)}"}), 500
 
-# --- ROUTES ADMINISTRATION ET SUPPRESSION ---
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
