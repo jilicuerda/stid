@@ -1,214 +1,168 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Analyse Globale & Stats - VolleyLive</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;700;900&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volleyball Stats Loader</title>
     <style>
-        body { font-family: 'Lexend', sans-serif; }
-        .bg-gradient-blue { background: linear-gradient(90deg, #eff6ff 0%, #dbeafe 100%); }
-        .bg-gradient-orange { background: linear-gradient(90deg, #fff7ed 0%, #ffedd5 100%); }
+        /* Base Page Styling */
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f8f9fa;
+            color: #2c3e50;
+        }
+
+        /* Loader Layout */
+        .loader-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .volleyball-wrapper {
+            position: relative;
+            width: 100px;
+            height: 140px; /* Gives room for the bounce */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        /* Animations */
+        .ball-bouncer {
+            /* ease-in makes it accelerate as it "falls" */
+            animation: bounce 0.5s infinite alternate ease-in; 
+        }
+
+        .volleyball {
+            width: 70px;
+            height: 70px;
+            animation: spin 1.5s infinite linear;
+        }
+
+        .shadow {
+            width: 50px;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 50%;
+            margin-top: 5px;
+            animation: shadow-scale 0.5s infinite alternate ease-in;
+        }
+
+        .loading-text {
+            margin-top: 24px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #555;
+            animation: pulse 1s infinite alternate ease-in-out;
+        }
+
+        /* Keyframes */
+        @keyframes bounce {
+            0% { transform: translateY(-80px); }
+            100% { transform: translateY(0); }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes shadow-scale {
+            0% { transform: scale(0.4); opacity: 0.2; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* App Content Styling (For the simulation) */
+        .hidden {
+            display: none !important;
+        }
+
+        .app-dashboard {
+            text-align: center;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        }
+
+        .stat-box {
+            background: #e9ecef;
+            padding: 10px 20px;
+            margin: 10px 0;
+            border-radius: 6px;
+        }
+
+        .refresh-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .refresh-btn:hover {
+            background: #2980b9;
+        }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    
-    <header class="bg-slate-900 text-white p-4 shadow-xl flex justify-between items-center sticky top-0 z-50">
-        <h1 class="text-xl font-black flex items-center gap-2 tracking-widest"><span class="material-symbols-outlined text-blue-500">query_stats</span> DATA SCOUTING</h1>
-        <a href="/" class="bg-slate-800 px-4 py-2 rounded-lg font-bold hover:bg-slate-700 transition text-sm">Retour Accueil</a>
-    </header>
+<body>
 
-    <main class="max-w-7xl mx-auto mt-8 p-4">
-        
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 mb-8">
-            <label class="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-wide">Analyser un match :</label>
-            <div class="flex gap-4">
-                <select id="matchSelect" class="flex-1 border-2 border-slate-200 rounded-xl p-3 bg-slate-50 text-slate-800 font-bold focus:ring-blue-500 outline-none">
-                    <option value="" disabled selected>Chargement...</option>
-                </select>
-                <button onclick="loadStats()" class="bg-blue-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2 shadow-lg">
-                    <span class="material-symbols-outlined">magic_button</span> Générer le Rapport
-                </button>
+    <div id="loader-container" class="loader-container">
+        <div class="volleyball-wrapper">
+            <div class="ball-bouncer">
+                <svg class="volleyball" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="50" cy="50" r="48" fill="#ffffff" stroke="#2c3e50" stroke-width="4"/>
+                    <path d="M 50 2 C 20 20, 20 80, 50 98" fill="none" stroke="#2c3e50" stroke-width="4"/>
+                    <path d="M 2 50 C 20 20, 80 20, 98 50" fill="none" stroke="#2c3e50" stroke-width="4"/>
+                    <path d="M 2 50 C 20 80, 80 80, 98 50" fill="none" stroke="#2c3e50" stroke-width="4"/>
+                </svg>
             </div>
-            <p id="loadingMsg" class="text-blue-500 font-bold mt-4 hidden animate-pulse">Extraction et compilation algorithmique en cours...</p>
+            <div class="shadow"></div>
         </div>
+        <p class="loading-text">Crunching the stats...</p>
+    </div>
 
-        <div id="statsContainer" class="hidden space-y-12">
-            <h2 id="matchTitleDisplay" class="text-4xl font-black text-slate-800 text-center my-10 uppercase tracking-tight"></h2>
-            
-            <section class="space-y-8">
-                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">group</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">1. Performances Individuelles</h3></div>
-                
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div id="pieZoneHome" class="bg-white rounded-2xl shadow-sm p-4 border border-blue-200 flex justify-center hidden"></div>
-                    <div id="pieZoneAway" class="bg-white rounded-2xl shadow-sm p-4 border border-orange-200 flex justify-center hidden"></div>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                    <div class="bg-white rounded-2xl shadow-lg border-t-8 border-blue-500 overflow-hidden">
-                        <div class="bg-gradient-blue p-4 font-black text-blue-900 uppercase tracking-widest text-center" id="titleIndivHome"></div>
-                        <div class="overflow-x-auto p-4">
-                            <table class="w-full text-sm text-center">
-                                <thead class="text-[9px] text-gray-500 border-b-2 border-blue-200 uppercase">
-                                    <tr><th class="p-2 text-left">N° / Poste</th><th class="p-2 text-blue-600">Total<br>Pts</th><th class="p-2 text-red-500">Fautes<br>Att.</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2">Att<br>Gagnées</th><th class="p-2">Blocs</th><th class="p-2">Aces</th><th class="p-2">% Serv<br>Réussis</th></tr>
-                                </thead>
-                                <tbody id="tableIndivHome" class="divide-y divide-gray-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-2xl shadow-lg border-t-8 border-orange-500 overflow-hidden">
-                        <div class="bg-gradient-orange p-4 font-black text-orange-900 uppercase tracking-widest text-center" id="titleIndivAway"></div>
-                        <div class="overflow-x-auto p-4">
-                            <table class="w-full text-sm text-center">
-                                <thead class="text-[9px] text-gray-500 border-b-2 border-orange-200 uppercase">
-                                    <tr><th class="p-2 text-left">N° / Poste</th><th class="p-2 text-orange-600">Total<br>Pts</th><th class="p-2 text-red-500">Fautes<br>Att.</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2">Att<br>Gagnées</th><th class="p-2">Blocs</th><th class="p-2">Aces</th><th class="p-2">% Serv<br>Réussis</th></tr>
-                                </thead>
-                                <tbody id="tableIndivAway" class="divide-y divide-gray-100"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section class="space-y-8">
-                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">rotate_right</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">2. Efficacité Tactique (Side-out / Break)</h3></div>
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                        <div class="bg-slate-100 p-3 font-bold text-slate-700 text-center text-sm border-b" id="titleRotHome"></div>
-                        <table class="w-full text-sm text-center">
-                            <thead class="text-[9px] bg-slate-50 text-slate-500 border-b uppercase">
-                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Réussite Récep<br>(Side-out)</th><th class="p-2">Gain Service<br>(Break)</th><th class="p-2 text-red-500">Fautes<br>Att</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2 font-black text-blue-600">BILAN</th></tr>
-                            </thead>
-                            <tbody id="tableRotHome" class="divide-y divide-gray-100"></tbody>
-                        </table>
-                    </div>
-                    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-                        <div class="bg-slate-100 p-3 font-bold text-slate-700 text-center text-sm border-b" id="titleRotAway"></div>
-                        <table class="w-full text-sm text-center">
-                            <thead class="text-[9px] bg-slate-50 text-slate-500 border-b uppercase">
-                                <tr><th class="p-2 text-left">Rotation</th><th class="p-2">Réussite Récep<br>(Side-out)</th><th class="p-2">Gain Service<br>(Break)</th><th class="p-2 text-red-500">Fautes<br>Att</th><th class="p-2">Ratio<br>Pts/Ft</th><th class="p-2 font-black text-orange-600">BILAN</th></tr>
-                            </thead>
-                            <tbody id="tableRotAway" class="divide-y divide-gray-100"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <section class="space-y-8" id="setsGraphsZone">
-                <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">insert_chart</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">3. Analyse Chronologique des Sets</h3></div>
-                </section>
-        </div>
-    </main>
+    <div id="app-content" class="hidden app-dashboard">
+        <h2>📊 Live Game Stats Ready!</h2>
+        <div class="stat-box">Spike Success Rate: <strong>68%</strong></div>
+        <div class="stat-box">Total Blocks: <strong>12</strong></div>
+        <button class="refresh-btn" onclick="fetchStats()">Simulate Next Play</button>
+    </div>
 
     <script>
-        document.addEventListener("DOMContentLoaded", async () => {
-            const sel = document.getElementById('matchSelect');
-            try {
-                const res = await fetch('/api/completed_matches');
-                const data = await res.json();
-                if (data.error) { sel.innerHTML = `<option value="" disabled selected>Erreur</option>`; return; }
-                if (data.length === 0) { sel.innerHTML = '<option value="" disabled selected>Aucun match trouvé</option>'; return; }
-                sel.innerHTML = '<option value="" disabled selected>Choisissez un match...</option>';
-                data.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.title}</option>`);
-            } catch (e) {}
-        });
+        function fetchStats() {
+            const loader = document.getElementById('loader-container');
+            const content = document.getElementById('app-content');
 
-        async function loadStats() {
-            const matchId = document.getElementById('matchSelect').value;
-            if (!matchId) return;
+            // 1. Show the loader, hide the stats dashboard
+            loader.classList.remove('hidden');
+            content.classList.add('hidden');
 
-            document.getElementById('loadingMsg').classList.remove('hidden');
-            document.getElementById('statsContainer').classList.add('hidden');
-
-            try {
-                const res = await fetch(`/api/match_stats/${matchId}`);
-                const text = await res.text();
-                
-                let data;
-                try { data = JSON.parse(text); } 
-                catch(e) { alert("🚨 CRASH SERVEUR : Timeout ou RAM.\n\n" + text.substring(0, 200)); return; }
-
-                if (data.error) { alert("Erreur: " + data.error); return; }
-
-                document.getElementById('matchTitleDisplay').innerText = data.match_title;
-                
-                // PIE CHARTS
-                const pzh = document.getElementById('pieZoneHome');
-                const pza = document.getElementById('pieZoneAway');
-                if(data.pie_h) { pzh.innerHTML = `<img src="data:image/png;base64,${data.pie_h}" class="w-64">`; pzh.classList.remove('hidden'); }
-                if(data.pie_a) { pza.innerHTML = `<img src="data:image/png;base64,${data.pie_a}" class="w-64">`; pza.classList.remove('hidden'); }
-
-                // 1. STATS INDIVIDUELLES
-                document.getElementById('titleIndivHome').innerText = data.team_home;
-                document.getElementById('titleIndivAway').innerText = data.team_away;
-                
-                const buildIndivRow = (r, isHome) => {
-                    const colorScore = isHome ? 'bg-blue-100 text-blue-900' : 'bg-orange-100 text-orange-900';
-                    return `<tr>
-                        <td class="p-3 text-left leading-tight">
-                            <span class="font-black text-lg">${r.num}</span> <span class="text-xs text-gray-500 uppercase">(${r.poste})</span>
-                            ${isHome ? `<br><span class="text-[10px] text-gray-400 font-mono tracking-tighter">${r.licence}</span>` : ''}
-                        </td>
-                        <td class="p-3 font-black text-lg ${colorScore} rounded-lg">${r.Pts}</td>
-                        <td class="p-3 text-red-500 font-semibold">${r.Err_Att}</td>
-                        <td class="p-3 text-gray-800 font-bold">${r.ratio_pf}</td>
-                        <td class="p-3 text-gray-600 font-semibold">${r.Att}</td>
-                        <td class="p-3 text-gray-600 font-semibold">${r.Bloc}</td>
-                        <td class="p-3 text-green-600 font-bold">${r.Ace}</td>
-                        <td class="p-3 font-bold">${r.srv_pct}%</td>
-                    </tr>`;
-                };
-                
-                document.getElementById('tableIndivHome').innerHTML = data.stats_indiv_h.map(r => buildIndivRow(r, true)).join('');
-                document.getElementById('tableIndivAway').innerHTML = data.stats_indiv_a.map(r => buildIndivRow(r, false)).join('');
-
-                // 2. STATS ROTATIONS GLOBALES
-                document.getElementById('titleRotHome').innerText = data.team_home;
-                document.getElementById('titleRotAway').innerText = data.team_away;
-
-                const buildRotRow = (r) => {
-                    const diffColor = r.bilan > 0 ? 'text-green-600 bg-green-50' : (r.bilan < 0 ? 'text-red-500 bg-red-50' : 'text-gray-500 bg-gray-50');
-                    const diffSign = r.bilan > 0 ? '+'+r.bilan : r.bilan;
-                    return `<tr>
-                        <td class="p-3 text-left font-mono text-xs tracking-widest text-slate-500 bg-slate-50 border-r">${r.key}</td>
-                        <td class="p-3 font-bold text-slate-700">${r.recep_pct}%</td>
-                        <td class="p-3 font-bold text-slate-700">${r.serv_pct}%</td>
-                        <td class="p-3 font-bold text-red-500">${r.fa}</td>
-                        <td class="p-3 font-bold text-slate-700">${r.ratio_pf}</td>
-                        <td class="p-3 font-black text-lg ${diffColor} rounded-r-lg border-l">${diffSign}</td>
-                    </tr>`;
-                };
-
-                document.getElementById('tableRotHome').innerHTML = data.eff_rot_h.map(r => buildRotRow(r)).join('');
-                document.getElementById('tableRotAway').innerHTML = data.eff_rot_a.map(r => buildRotRow(r)).join('');
-
-                // 3. GRAPHIQUES PAR SETS
-                const zone = document.getElementById('setsGraphsZone');
-                zone.innerHTML = '';
-                data.sets.forEach(s => {
-                    zone.innerHTML += `
-                        <div class="bg-white p-8 rounded-3xl shadow-lg border border-slate-200 relative overflow-hidden">
-                            <div class="absolute top-0 left-0 bg-slate-800 text-white px-6 py-2 rounded-br-3xl font-black tracking-widest uppercase text-sm">Set ${s.set}</div>
-                            <div class="absolute top-4 right-6 bg-slate-100 text-slate-800 px-6 py-2 rounded-xl border-2 border-slate-300 font-black text-2xl">${s.score}</div>
-                            
-                            <div class="mt-12 mb-10">
-                                ${s.graph_duel ? `<img src="data:image/png;base64,${s.graph_duel}" class="w-full rounded-2xl shadow-sm border border-slate-100">` : ''}
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                                <div>${s.graph_rot_h ? `<img src="data:image/png;base64,${s.graph_rot_h}" class="w-full rounded-xl mix-blend-multiply">` : ''}</div>
-                                <div>${s.graph_rot_a ? `<img src="data:image/png;base64,${s.graph_rot_a}" class="w-full rounded-xl mix-blend-multiply">` : ''}</div>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                document.getElementById('statsContainer').classList.remove('hidden');
-
-            } catch (e) { alert("Erreur JS : " + e.message); } 
-            finally { document.getElementById('loadingMsg').classList.add('hidden'); }
+            // 2. Simulate the time it takes your app to calculate live stats
+            setTimeout(() => {
+                // 3. Hide the loader, reveal the updated stats
+                loader.classList.add('hidden');
+                content.classList.remove('hidden');
+            }, 2500); 
         }
+
+        // Start the animation simulation as soon as the page loads
+        window.onload = fetchStats;
     </script>
 </body>
 </html>
