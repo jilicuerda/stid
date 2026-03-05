@@ -38,6 +38,12 @@ def superadmin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# --- PAGE D'ACCUEIL ---
+@app.route('/')
+def landing_page(): 
+    return render_template('landing.html')
+
+# --- AUTHENTIFICATION ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -52,7 +58,7 @@ def login():
                 session['club_id'] = user[3]
                 session['role'] = user[4]
                 if session['role'] == 'superadmin': return redirect(url_for('admin_dashboard'))
-                return redirect(url_for('index'))
+                return redirect(url_for('landing_page'))
             else:
                 return render_template('login.html', error="Identifiants invalides")
     return render_template('login.html')
@@ -60,11 +66,12 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for('landing_page'))
 
-@app.route('/')
+# --- MATCH EN DIRECT (CONSOLE) ---
+@app.route('/console')
 @login_required
-def index(): 
+def console_page(): 
     return render_template('index.html')
 
 @app.route('/api/my_teams', methods=['GET'])
@@ -170,10 +177,7 @@ def save_match():
             
             trans.commit()
             return jsonify({"status": "success", "message": "Match sauvegardé !"})
-    except Exception as e: 
-        print("ERREUR SAUVEGARDE:", e)
-        # --- LA BALISE DE TEST EST ICI ---
-        return jsonify({"status": "error", "message": f"[CODE V2 ACTIF] Erreur BDD : {str(e)}"}), 200
+    except Exception as e: return jsonify({"status": "error", "message": str(e)}), 200
 
 @app.route('/live')
 @login_required
@@ -188,6 +192,7 @@ def live_matches_api():
             return jsonify([{"id": m[0], "team_home": m[1], "team_away": m[2], "current_set": m[3], "score_home": m[4], "score_away": m[5], "sets_home": m[6], "sets_away": m[7]} for m in matches])
     except Exception: return jsonify([])
 
+# --- ROUTES EXTRACTION PDF ---
 @app.route('/extraction')
 @login_required
 def extraction_page(): return render_template('extraction.html')
@@ -219,6 +224,9 @@ def save_pdf_report():
             return jsonify({"status": "success", "message": "Sauvegardé !"})
     except Exception as e: return jsonify({"status": "error", "message": str(e)}), 500
 
+# ======================================================================
+# ROUTES POUR LES STATISTIQUES 
+# ======================================================================
 @app.route('/stats')
 @login_required
 def stats_page(): return render_template('stats.html')
@@ -319,6 +327,7 @@ def get_match_stats(match_id):
         print(f"ERREUR GENERATION STATS : {e}")
         return jsonify({"error": f"Erreur de calcul des statistiques : {str(e)}"}), 500
 
+# --- ROUTES ADMINISTRATION ET SUPPRESSION ---
 @app.route('/admin')
 @superadmin_required
 def admin_dashboard():
@@ -341,6 +350,24 @@ def add_club():
         except: flash("Erreur: Club existant.", "error")
     return redirect(url_for('admin_dashboard'))
 
+@app.route('/admin/delete_club/<int:club_id>', methods=['POST'])
+@superadmin_required
+def delete_club(club_id):
+    try:
+        with engine.connect() as conn:
+            trans = conn.begin()
+            # Suppression en cascade manuelle
+            conn.execute(text("DELETE FROM points WHERE match_id IN (SELECT id FROM matches WHERE club_id = :cid)"), {"cid": club_id})
+            conn.execute(text("DELETE FROM matches WHERE club_id = :cid"), {"cid": club_id})
+            conn.execute(text("DELETE FROM pdf_reports WHERE club_id = :cid"), {"cid": club_id})
+            conn.execute(text("DELETE FROM teams WHERE club_id = :cid"), {"cid": club_id})
+            conn.execute(text("DELETE FROM users WHERE club_id = :cid"), {"cid": club_id})
+            conn.execute(text("DELETE FROM clubs WHERE id = :cid"), {"cid": club_id})
+            trans.commit()
+            flash("Club et toutes ses données supprimés.", "success")
+    except Exception as e: flash("Erreur suppression club.", "error")
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/add_user', methods=['POST'])
 @superadmin_required
 def add_user():
@@ -353,6 +380,21 @@ def add_user():
                 trans.commit()
                 flash("Utilisateur créé.", "success")
         except: flash("Erreur: Pseudo pris.", "error")
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
+@superadmin_required
+def delete_user(user_id):
+    if user_id == session.get('user_id'):
+        flash("Vous ne pouvez pas supprimer votre propre compte.", "error")
+        return redirect(url_for('admin_dashboard'))
+    try:
+        with engine.connect() as conn:
+            trans = conn.begin()
+            conn.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": user_id})
+            trans.commit()
+            flash("Utilisateur supprimé.", "success")
+    except: flash("Erreur suppression.", "error")
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/add_team', methods=['POST'])
@@ -368,6 +410,21 @@ def add_team():
                 flash("Collectif ajouté.", "success")
         except Exception as e: flash("Erreur lors de l'ajout.", "error")
     return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/delete_team/<int:team_id>', methods=['POST'])
+@superadmin_required
+def delete_team(team_id):
+    try:
+        with engine.connect() as conn:
+            trans = conn.begin()
+            conn.execute(text("DELETE FROM points WHERE match_id IN (SELECT id FROM matches WHERE team_id = :tid)"), {"tid": team_id})
+            conn.execute(text("DELETE FROM matches WHERE team_id = :tid"), {"tid": team_id})
+            conn.execute(text("DELETE FROM teams WHERE id = :tid"), {"tid": team_id})
+            trans.commit()
+            flash("Équipe et ses matchs supprimés.", "success")
+    except: flash("Erreur suppression équipe.", "error")
+    return redirect(url_for('admin_dashboard'))
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
