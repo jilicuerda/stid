@@ -202,7 +202,15 @@
                 rotate(team) { const s = this.state[team].onCourt; s.push(s.shift()); }
                 substitute(team, idx, num) { const p = this.state[team].players.find(x => x.num == num); if(p) this.state[team].onCourt[idx] = p; }
                 swapPositions(team, idx1, idx2) { const temp = this.state[team].onCourt[idx1]; this.state[team].onCourt[idx1] = this.state[team].onCourt[idx2]; this.state[team].onCourt[idx2] = temp; }
-                endSet() { (this.state.home.score > this.state.away.score) ? this.state.home.sets++ : this.state.away.sets++; this.state.set++; this.state.home.score = 0; this.state.away.score = 0; return true; }
+                
+                endSet() { 
+                    (this.state.home.score > this.state.away.score) ? this.state.home.sets++ : this.state.away.sets++; 
+                    this.state.set++; 
+                    this.state.home.score = 0; 
+                    this.state.away.score = 0; 
+                    return true; 
+                }
+                
                 generateBackupJSON() { return "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state)); }
                 loadFromJSON(json) { try { this.state = JSON.parse(json); return true; } catch(e) { return false; } }
             }
@@ -212,7 +220,6 @@
             window.swapSelection = null; 
             window.currentLiveMatchId = null;
 
-            // Variables pour le système d'Auto-Save
             let isSyncing = false;
             let pendingSync = false;
 
@@ -345,7 +352,6 @@
                 window.updateScreen();
             };
 
-            // DÉBUTER LE MATCH ET AUTO-SYNC
             window.startActualMatch = function() { 
                 if(!window.game.state.server) { alert("⚠️ Veuillez choisir quelle équipe a le premier service !"); return; }
                 window.game.startScoring(); 
@@ -353,7 +359,7 @@
                 document.getElementById('scoringControls').classList.remove('hidden'); 
                 window.swapSelection = null; 
                 window.updateScreen(); 
-                window.autoSync(); // Synchronisation immédiate du début
+                window.autoSync(); 
             };
 
             window.switchSides = function() { window.isHomeLeft = !window.isHomeLeft; window.updateScreen(); };
@@ -379,7 +385,12 @@
                 document.getElementById('btnPointLeft').className = (teamLeft === 'home') ? "flex flex-col items-center justify-center py-5 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform" : "flex flex-col items-center justify-center py-5 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform";
                 document.getElementById('lblRight').innerText = s[teamRight].name; document.getElementById('scoreRight').innerText = s[teamRight].score; document.getElementById('txtPointRight').innerText = "+ " + s[teamRight].name;
                 document.getElementById('btnPointRight').className = (teamRight === 'home') ? "flex flex-col items-center justify-center py-5 bg-primary rounded-xl text-white shadow-lg active:scale-95 transition-transform" : "flex flex-col items-center justify-center py-5 bg-gray-800 rounded-xl text-white shadow-lg active:scale-95 transition-transform";
-                document.getElementById('gSetLeft').innerText = s[teamLeft].sets; document.getElementById('gSetRight').innerText = s[teamRight].sets; document.getElementById('setNum').innerText = s.set; document.getElementById('prepSetNum').innerText = s.set; document.getElementById('matchVersus').innerText = `${s.home.name} vs ${s.away.name}`;
+                document.getElementById('gSetLeft').innerText = s[teamLeft].sets; document.getElementById('gSetRight').innerText = s[teamRight].sets; 
+                
+                document.getElementById('setNum').innerText = s.set; 
+                document.getElementById('prepSetNum').innerText = s.set; 
+                
+                document.getElementById('matchVersus').innerText = `${s.home.name} vs ${s.away.name}`;
 
                 const renderHalf = (team, containerId, positionsMap) => {
                     const container = document.getElementById(containerId); container.innerHTML = '';
@@ -392,7 +403,6 @@
                 renderHalf(teamLeft, 'courtLeft', POS_LEFT); renderHalf(teamRight, 'courtRight', POS_RIGHT);
                 document.getElementById('historyLog').innerHTML = s.history.slice(-4).reverse().map(h => `<div class="flex justify-between items-center border-b pb-1"><span class="font-bold ${h.winner_team === s.home.name ? 'text-primary' : 'text-gray-600'}">${h.winner_team} (+1)</span><span class="text-xs bg-gray-100 px-2 rounded text-gray-800">${h.action} (${h.actor_num})</span></div>`).join('');
 
-                // ✨ EASTER EGG ZAKARIA ✨
                 if ((s.home.score === 20 && s.away.score === 4) || (s.away.score === 20 && s.home.score === 4)) {
                     let egg = document.getElementById('easterEgg');
                     if(!egg) {
@@ -407,7 +417,6 @@
                 }
             };
 
-            // --- LE NOUVEAU MOTEUR D'AUTO-SYNCHRONISATION EN ARRIERE-PLAN ---
             window.autoSync = async function(isFinished = false) {
                 if (isSyncing) { pendingSync = true; return; }
                 isSyncing = true;
@@ -515,7 +524,6 @@
                 targetDiv.classList.remove('hidden');
             };
             
-            // SAUVEGARDE AUTO APRES CHAQUE ACTION !
             window.finalizeScore = function(action) { 
                 window.game.scorePoint(window.game.state.tempPoint.winner, { action: action, actorTeam: window.game.state.tempPoint.actorTeam, actorNum: window.game.state.tempPoint.actorNum }); 
                 document.getElementById('scoreModal').classList.add('hidden'); 
@@ -536,19 +544,50 @@
                 window.autoSync(); 
             };
 
+            // --- NOUVELLE FONCTION FIN DE SET SÉCURISÉE ---
             window.endSet = function() { 
                 if(confirm("Confirmer la fin du set ?")) { 
                     if(window.game.endSet()) { 
-                        window.downloadBackup(); window.switchSides(); 
-                        window.game.state.isStarted = false; window.game.state.server = null; 
-                        document.getElementById('preMatchBanner').classList.remove('hidden'); document.getElementById('scoringControls').classList.add('hidden');
+                        
+                        // Sécurité: Essaie de télécharger le fichier de backup, 
+                        // mais ignore l'erreur si la tablette (Safari/Chrome Mobile) bloque le téléchargement
+                        try { window.downloadBackup(); } catch(e) { console.log("Sauvegarde locale bloquée par l'appareil."); }
+                        
+                        window.switchSides(); 
+                        window.game.state.isStarted = false; 
+                        window.game.state.server = null; 
+                        
+                        // Réinitialiser l'interface pour préparer le prochain set
+                        document.getElementById('preMatchBanner').classList.remove('hidden'); 
+                        document.getElementById('scoringControls').classList.add('hidden');
                         document.getElementById('btnServeHome').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
                         document.getElementById('btnServeAway').className = "px-6 py-2 border-2 border-gray-300 rounded-xl text-sm font-bold bg-white text-gray-700 transition";
+                        
                         window.updateScreen(); 
                         window.autoSync(); 
+
+                        // Indication visuelle claire pour l'arbitre !
+                        alert("✅ Set terminé et sauvegardé !\n\n➡️ Préparation du Set " + window.game.state.set + ".\nVeuillez choisir l'équipe au service et ajuster vos joueurs si besoin avant de reprendre.");
                     } 
                 } 
             };
+
+            window.downloadBackup = function() { 
+                const a = document.createElement('a'); 
+                a.href = window.game.generateBackupJSON(); 
+                a.download = `VOLLEY_BACKUP_${Date.now()}.json`; 
+                document.body.appendChild(a); 
+                a.click(); 
+                a.remove(); 
+            };
+            
+            window.loadGameFromFile = function(input) {
+                const file = input.files[0]; if(!file) return; const r = new FileReader();
+                r.onload = (e) => {
+                    if(window.game.loadFromJSON(e.target.result)) { document.getElementById('setupModal').classList.add('hidden'); document.getElementById('gameUI').style.display = 'flex'; document.getElementById('preMatchBanner').classList.add('hidden'); document.getElementById('scoringControls').classList.remove('hidden'); window.updateScreen(); } else alert("Fichier invalide");
+                }; r.readAsText(file);
+            };
+
         })();
     </script>
 </body>
