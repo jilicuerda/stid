@@ -12,6 +12,16 @@ import gc
 # Configuration des actions considérées comme des fautes d'attaque/jeu
 FAUTES_ATT_LISTE = ["Attaque Out", "Attaque Filet", "Faute Filet / Arbitre", "Faute (Jeu/Récep)"]
 
+# Traducteur des postes Anglais -> Français
+ROLE_FR = {
+    "OH": "R4", 
+    "MB": "Central", 
+    "S": "Passeur", 
+    "OPP": "Pointu", 
+    "L": "Libéro", 
+    "?": "Inconnu"
+}
+
 def fig_to_base64(fig):
     buf = io.BytesIO()
     fig.savefig(buf, format='png', bbox_inches='tight', dpi=80)
@@ -141,14 +151,15 @@ def tracer_repartition_roles_base64(stats_dict, mapping_roles, nom_equipe):
     try:
         repart = {}
         for num, s in stats_dict.items():
-            r = mapping_roles.get(str(num), "?")
-            repart[r] = repart.get(r, 0) + s["Pts"]
+            r_raw = mapping_roles.get(str(num), "?")
+            r_fr = ROLE_FR.get(r_raw, r_raw) # Traduction ici
+            repart[r_fr] = repart.get(r_fr, 0) + s["Pts"]
         roles = [r for r in repart.keys() if repart[r] > 0]
         if not roles: return None
         
         fig, ax = plt.subplots(figsize=(6, 5))
         ax.pie([repart[r] for r in roles], labels=roles, autopct='%1.1f%%', startangle=140, colors=plt.cm.Paired.colors)
-        ax.set_title(f"RÉPARTITION PAR POSTE\n{nom_equipe.upper()}", fontweight='bold')
+        ax.set_title(f"RÉPARTITION DES POINTS\n{nom_equipe.upper()}", fontweight='bold')
         return fig_to_base64(fig)
     except: return None
 
@@ -184,20 +195,25 @@ def calculer_stats_individuelles(tous_points, roster_home, roster_away, nom_h, n
 
     res_h = []
     for n, s in s_h.items():
-        s["num"] = n; s["poste"] = roles_h.get(n, "?"); s["licence"] = licences_h.get(n, "N/A")
+        s["num"] = n
+        raw_role = roles_h.get(n, "?")
+        s["poste"] = ROLE_FR.get(raw_role, raw_role) # Traduction Français
+        s["licence"] = licences_h.get(n, "N/A")
         s["ratio_pf"] = round(s["Pts"] / s["Err_Att"], 2) if s["Err_Att"] > 0 else s["Pts"]
         s["srv_pct"] = round((s["Serv_T"] - s["Serv_F"]) / s["Serv_T"] * 100, 1) if s["Serv_T"] > 0 else 0
         res_h.append(s)
         
     res_a = []
     for n, s in s_a.items():
-        s["num"] = n; s["poste"] = roles_a.get(n, "?")
+        s["num"] = n
+        raw_role = roles_a.get(n, "?")
+        s["poste"] = ROLE_FR.get(raw_role, raw_role) # Traduction Français
         s["ratio_pf"] = round(s["Pts"] / s["Err_Att"], 2) if s["Err_Att"] > 0 else s["Pts"]
         s["srv_pct"] = round((s["Serv_T"] - s["Serv_F"]) / s["Serv_T"] * 100, 1) if s["Serv_T"] > 0 else 0
         res_a.append(s)
 
     pie_h = tracer_repartition_roles_base64(s_h, roles_h, nom_h)
-    pie_a = tracer_repartition_roles_base64(s_a, roles_a, nom_a)
+    pie_a = None # Désactivé pour l'adversaire (Demande utilisateur)
     
     return sorted(res_h, key=lambda x: x["Pts"], reverse=True), sorted(res_a, key=lambda x: x["Pts"], reverse=True), pie_h, pie_a
 
