@@ -9,10 +9,9 @@ import base64
 import math
 import gc
 
-# Configuration des actions considérées comme des fautes d'attaque/jeu
-FAUTES_ATT_LISTE = ["Attaque Out", "Attaque Filet", "Faute Filet / Arbitre", "Faute (Jeu/Récep)"]
+# Nouveaux labels de fautes intégrés
+FAUTES_ATT_LISTE = ["Faute attaque (filet/out)", "Faute", "Attaque Out", "Attaque Filet", "Faute Filet / Arbitre", "Faute (Jeu/Récep)"]
 
-# Traducteur des postes Anglais -> Français
 ROLE_FR = {
     "OH": "R4", 
     "MB": "Central", 
@@ -24,7 +23,7 @@ ROLE_FR = {
 
 def fig_to_base64(fig):
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight', dpi=80)
+    fig.savefig(buf, format='png', bbox_inches='tight', dpi=70) # DPI réduit pour plus de vitesse
     plt.close(fig)
     plt.close('all')
     gc.collect()
@@ -77,7 +76,7 @@ def tracer_duel_chronologique_annote(history_set, nom_h, nom_a, num_set):
 
         sequences.append({"team": c_team, "player": c_num, "pts": pts_serie, "start": start_score})
 
-        fig, ax = plt.subplots(figsize=(20, 7))
+        fig, ax = plt.subplots(figsize=(18, 6))
         x_pos, max_s = 0, 0
         labels, colors = [], []
         
@@ -110,7 +109,9 @@ def tracer_duel_chronologique_annote(history_set, nom_h, nom_a, num_set):
         plt.subplots_adjust(bottom=0.15)
         
         return fig_to_base64(fig)
-    except: return None
+    except Exception as e: 
+        print(f"Erreur graphe chrono: {e}")
+        return None
 
 def dessiner_un_terrain(ax, config_point, stats, couleur, nom_h, nom_a, equipe_au_service):
     ax.add_patch(patches.Rectangle((0, 0), 18, 9, linewidth=2, edgecolor='black', facecolor='#fafafa'))
@@ -145,14 +146,16 @@ def afficher_grille_rotations(liste_stats, nom_h, nom_a, equipe_service, couleur
             else: ax.axis('off')
         fig.suptitle(titre, fontsize=18, fontweight='bold', y=1.02)
         return fig_to_base64(fig)
-    except: return None
+    except Exception as e: 
+        print(f"Erreur grille rot: {e}")
+        return None
 
 def tracer_repartition_roles_base64(stats_dict, mapping_roles, nom_equipe):
     try:
         repart = {}
         for num, s in stats_dict.items():
             r_raw = mapping_roles.get(str(num), "?")
-            r_fr = ROLE_FR.get(r_raw, r_raw) # Traduction ici
+            r_fr = ROLE_FR.get(r_raw, r_raw)
             repart[r_fr] = repart.get(r_fr, 0) + s["Pts"]
         roles = [r for r in repart.keys() if repart[r] > 0]
         if not roles: return None
@@ -197,7 +200,7 @@ def calculer_stats_individuelles(tous_points, roster_home, roster_away, nom_h, n
     for n, s in s_h.items():
         s["num"] = n
         raw_role = roles_h.get(n, "?")
-        s["poste"] = ROLE_FR.get(raw_role, raw_role) # Traduction Français
+        s["poste"] = ROLE_FR.get(raw_role, raw_role)
         s["licence"] = licences_h.get(n, "N/A")
         s["ratio_pf"] = round(s["Pts"] / s["Err_Att"], 2) if s["Err_Att"] > 0 else s["Pts"]
         s["srv_pct"] = round((s["Serv_T"] - s["Serv_F"]) / s["Serv_T"] * 100, 1) if s["Serv_T"] > 0 else 0
@@ -207,15 +210,14 @@ def calculer_stats_individuelles(tous_points, roster_home, roster_away, nom_h, n
     for n, s in s_a.items():
         s["num"] = n
         raw_role = roles_a.get(n, "?")
-        s["poste"] = ROLE_FR.get(raw_role, raw_role) # Traduction Français
+        s["poste"] = ROLE_FR.get(raw_role, raw_role)
         s["ratio_pf"] = round(s["Pts"] / s["Err_Att"], 2) if s["Err_Att"] > 0 else s["Pts"]
         s["srv_pct"] = round((s["Serv_T"] - s["Serv_F"]) / s["Serv_T"] * 100, 1) if s["Serv_T"] > 0 else 0
         res_a.append(s)
 
     pie_h = tracer_repartition_roles_base64(s_h, roles_h, nom_h)
-    pie_a = None # Désactivé pour l'adversaire (Demande utilisateur)
     
-    return sorted(res_h, key=lambda x: x["Pts"], reverse=True), sorted(res_a, key=lambda x: x["Pts"], reverse=True), pie_h, pie_a
+    return sorted(res_h, key=lambda x: x["Pts"], reverse=True), sorted(res_a, key=lambda x: x["Pts"], reverse=True), pie_h, None
 
 def calculer_efficacite_rotations(tous_points, nom_h, nom_a):
     r_h, r_a = [], []
