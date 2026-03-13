@@ -94,7 +94,7 @@ def get_my_teams():
         with engine.connect() as conn:
             teams = conn.execute(text("SELECT id, name FROM teams WHERE club_id = :cid ORDER BY name"), {"cid": session.get('club_id')}).fetchall()
             return jsonify([{"id": t[0], "name": t[1]} for t in teams])
-    except: return jsonify([])
+    except Exception as e: return jsonify([])
 
 @app.route('/api/last_roster/<int:team_id>', methods=['GET'])
 @login_required
@@ -240,7 +240,6 @@ def get_completed_matches():
             return jsonify(result)
     except Exception as e: return jsonify({"error": str(e)}), 500
 
-# REQUETE PRINCIPALE DES STATS (SANS GRAPHIQUES LOURDS POUR ÉVITER TIMEOUT)
 @app.route('/api/match_stats_text/<int:match_id>')
 @login_required
 def get_match_stats_text(match_id):
@@ -272,10 +271,21 @@ def get_match_stats_text(match_id):
                 pts_set = [p for p in tous_points if p['set'] == n_set]
                 if pts_set: sets_scores.append({"set": n_set, "score": f"{pts_set[-1]['score_dom']} - {pts_set[-1]['score_ext']}"})
 
-            return jsonify({"match_title": f"{team_home} vs {team_away}", "sets_info": sets_scores, "stats_indiv_h": indiv_h, "stats_indiv_a": indiv_a, "pie_h": pie_h, "eff_rot_h": eff_rot_h, "eff_rot_a": eff_rot_a, "team_home": team_home, "team_away": team_away})
+            # CONSTRUCTION DE LA DONNÉE JSON BRUTE POUR L'EXPORT
+            raw_data = {
+                "home": {"name": team_home, "players": roster_h.get('all', [])},
+                "away": {"name": team_away, "players": roster_a.get('all', [])},
+                "history": tous_points
+            }
+
+            return jsonify({
+                "match_title": f"{team_home} vs {team_away}", "sets_info": sets_scores, 
+                "stats_indiv_h": indiv_h, "stats_indiv_a": indiv_a, "pie_h": pie_h, 
+                "eff_rot_h": eff_rot_h, "eff_rot_a": eff_rot_a, "team_home": team_home, "team_away": team_away,
+                "raw_data": raw_data # <-- AJOUT POUR L'EXPORT JSON
+            })
     except Exception as e: return jsonify({"error": str(e)}), 500
 
-# CHARGEMENT ASYNCHRONE DES GRAPHIQUES PAR SET (EVITE LE CRASH RENDER)
 @app.route('/api/match_stats_graphs/<int:match_id>/<int:set_num>')
 @login_required
 def get_match_stats_graphs(match_id, set_num):
@@ -313,7 +323,6 @@ def get_match_stats_graphs(match_id, set_num):
             return jsonify({"graph_duel": b64_duel, "graph_rot_h": b64_rot_h, "graph_rot_a": b64_rot_a})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
-# --- ANALYSE D'UN JSON EN DIRECT DANS LES STATS ---
 @app.route('/api/analyze_json', methods=['POST'])
 @login_required
 def analyze_json_stats():
