@@ -75,7 +75,16 @@
         </div>
 
         <div id="statsContainer" class="hidden space-y-12 mt-8">
-            <h2 id="matchTitleDisplay" class="text-4xl font-black text-slate-800 text-center my-10 uppercase tracking-tight"></h2>
+            <h2 id="matchTitleDisplay" class="text-4xl font-black text-slate-800 text-center mt-10 mb-4 uppercase tracking-tight"></h2>
+            
+            <div id="exportZone" class="flex justify-center items-center gap-2 mb-10 hidden">
+                <select id="exportSetSelect" class="border-2 border-slate-200 bg-white rounded-xl px-4 py-2 text-sm font-bold text-slate-700 outline-none focus:border-blue-500">
+                    <option value="all">Match Complet</option>
+                </select>
+                <button onclick="downloadJsonExport()" class="bg-blue-600 text-white px-5 py-2 rounded-xl text-sm font-bold shadow hover:bg-blue-700 flex items-center gap-2 transition">
+                    <span class="material-symbols-outlined text-sm">download</span> Exporter la Data (JSON)
+                </button>
+            </div>
             
             <section class="space-y-8">
                 <div class="flex items-center gap-3 border-b-2 border-slate-300 pb-2"><span class="material-symbols-outlined text-3xl text-slate-700">group</span><h3 class="text-2xl font-black text-slate-800 uppercase tracking-widest">1. Performances Individuelles</h3></div>
@@ -172,6 +181,7 @@
             const file = input.files[0]; if(!file) return;
             document.getElementById('loadingMsg').classList.remove('hidden');
             document.getElementById('statsContainer').classList.add('hidden');
+            document.getElementById('exportZone').classList.add('hidden');
             document.getElementById('loadingMsg').scrollIntoView({ behavior: 'smooth' });
 
             const reader = new FileReader();
@@ -195,6 +205,7 @@
             activeJsonData = null;
             document.getElementById('loadingMsg').classList.remove('hidden');
             document.getElementById('statsContainer').classList.add('hidden');
+            document.getElementById('exportZone').classList.add('hidden');
             document.getElementById('loadingMsg').scrollIntoView({ behavior: 'smooth' });
 
             try {
@@ -207,6 +218,17 @@
 
         function renderTextStats(data) {
             document.getElementById('matchTitleDisplay').innerText = data.match_title;
+            
+            // --- GESTION DE L'EXPORT JSON ---
+            window.currentRawData = data.raw_data;
+            const exportSelect = document.getElementById('exportSetSelect');
+            exportSelect.innerHTML = '<option value="all">Match Complet</option>';
+            data.sets_info.forEach(s => {
+                exportSelect.innerHTML += `<option value="${s.set}">Uniquement Set ${s.set}</option>`;
+            });
+            document.getElementById('exportZone').classList.remove('hidden');
+            // --------------------------------
+
             const pzh = document.getElementById('pieZoneHome');
             if(data.pie_h) { pzh.innerHTML = `<img src="data:image/png;base64,${data.pie_h}" class="w-80">`; pzh.classList.remove('hidden'); }
             document.getElementById('titleIndivHome').innerText = data.team_home;
@@ -281,6 +303,34 @@
                 document.getElementById(`graphs-set-${setNum}`).innerHTML = "<p class='text-red-500 font-bold'>Erreur de rendu graphique pour ce set.</p>";
             }
         }
+
+        // FONCTION DE TÉLÉCHARGEMENT DU JSON
+        window.downloadJsonExport = function() {
+            if(!window.currentRawData) return;
+            
+            const setVal = document.getElementById('exportSetSelect').value;
+            let exportData = JSON.parse(JSON.stringify(window.currentRawData)); // Copie propre
+            
+            // Formatage du nom du fichier pour éviter les espaces
+            let fileName = `Data_${exportData.home.name}_vs_${exportData.away.name}`.replace(/\s+/g, '_');
+            
+            if(setVal !== "all") {
+                const s = parseInt(setVal);
+                exportData.history = exportData.history.filter(p => p.set === s);
+                fileName += `_Set_${s}`;
+            } else {
+                fileName += `_Complet`;
+            }
+            
+            // Création du fichier téléchargeable
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+            const a = document.createElement('a');
+            a.href = dataStr;
+            a.download = fileName + ".json";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        };
     </script>
 </body>
 </html>
